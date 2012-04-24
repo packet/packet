@@ -1,0 +1,12 @@
+# Gyp output.
+build/*
+!build/packet.gyp
+
+# GNU Make.
+*Makefile*
+*makefile
+*.mk
+
+# Antlr.
+._antlr*
+
