@@ -21,6 +21,19 @@ grammar Packet;
 options {
   language = Python;
   output = AST;
+  ASTLabelType=CommonTree;
+}
+
+tokens {
+  ANNOTATION;
+  ANNOTATION_PARAM;
+  EXTENDS;
+  FIELD;
+  FIELD_TYPE;
+  FILE;
+  INCLUDE;
+  PACKET;
+  SEQUENCE;
 }
 
 @header {
@@ -58,7 +71,7 @@ def main(argv, otherArg=None):
   parser = PacketParser(tokens);
 
   try:
-    parser.expr()
+    parser.file()
   except RecognitionException:
     traceback.print_stack()
 }
@@ -67,21 +80,27 @@ def main(argv, otherArg=None):
  * Parser rules.
  */
 file:
-	expr+;
+  expr+ -> ^(FILE expr+);
 
 expr:
   include
   | packet;
 
 include:
-  'import' path SEMICOLON;
+  'include' path SEMICOLON -> ^(INCLUDE path)
+  ;
 
 packet:
-  packet_def LBRAC packet_body RBRAC
+  packet_def LBRAC packet_body RBRAC -> ^(PACKET packet_def packet_body)
   ;
 
 packet_def:
-  annotations 'packet' packet_name ( LPRAN parent_packet_name RPRAN )?
+  annotation* 'packet' packet_name parent_packet? ->
+      packet_name annotation* parent_packet?
+  ;
+
+parent_packet:
+  LPRAN parent_packet_name RPRAN -> ^(EXTENDS parent_packet_name)
   ;
 
 parent_packet_name:
@@ -89,34 +108,32 @@ parent_packet_name:
   | 'object';
 
 packet_body:
-   (field SEMICOLON)*
+   (field SEMICOLON!)*
    ;
 
 field:
-  sequence? annotations  field_type field_name
+  sequence? annotation* field_type field_name ->
+      ^(FIELD field_name sequence? annotation* field_type)
   ;
 
 sequence:
-  ( NUMBER ) COLON
-  ;
-
-annotations:
-  ( annotation )*
+  ( NUMBER ) COLON -> ^(SEQUENCE NUMBER)
   ;
 
 annotation:
-  AT IDENTIFIER annotation_param*
+  AT IDENTIFIER annotation_param* -> ^(ANNOTATION IDENTIFIER annotation_param*)
   ;
 
 annotation_param:
-  LPRAN IDENTIFIER ( COMMA IDENTIFIER )* RPRAN
+  LPRAN IDENTIFIER ( COMMA IDENTIFIER )* RPRAN ->
+      ^(ANNOTATION_PARAM IDENTIFIER ( IDENTIFIER )*)
   ;
 
 packet_name: IDENTIFIER;
 
 field_name: IDENTIFIER;
 
-field_type: IDENTIFIER;
+field_type: IDENTIFIER -> ^(FIELD_TYPE IDENTIFIER);
 
 name: IDENTIFIER;
 
