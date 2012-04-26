@@ -1,7 +1,9 @@
 #!/bin/bash
 
 install_gyp() {
+  pushd .
   cd third_party/gyp && sudo python setup.py install
+  popd .
 }
 
 error() {
