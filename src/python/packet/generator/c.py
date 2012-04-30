@@ -16,5 +16,6 @@
 #
 # The GNU General Public License is contained in the file LICENSE.
 #
+''' The default generator for C. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
