@@ -32,6 +32,7 @@ tokens {
   FIELD_TYPE;
   FILE;
   INCLUDE;
+  PACKAGE;
   PACKET;
   SEQUENCE;
 }
@@ -80,7 +81,10 @@ def main(argv, otherArg=None):
  * Parser rules.
  */
 file:
-  expr+ -> ^(FILE expr+);
+  package* expr+ -> ^(FILE expr+);
+
+package:
+  'package' name literal SEMICOLON -> ^(PACKAGE name literal);
 
 expr:
   include
@@ -137,6 +141,8 @@ field_type: IDENTIFIER -> ^(FIELD_TYPE IDENTIFIER);
 
 name: IDENTIFIER;
 
+literal: LITERAL;
+
 path: PATH;
 
 /*
@@ -176,6 +182,16 @@ UNDERSCORE: '_';
 LT: '<';
 
 GT: '>';
+
+LITERAL: QOUTATION LITERAL_PART+ QOUTATION;
+
+fragment LITERAL_PART:
+  ~( QOUTATION )
+  ;
+  
+fragment QOUTATION:
+  '"' | '\''
+  ;
 
 PATH: LT PATH_PART+ GT;
 
