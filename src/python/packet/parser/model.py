@@ -31,7 +31,7 @@ def parse_file(path):
   ''' Returns a pythonic PacketParser.
       @param path: Path to the packet file.
       @returns POM. '''
-  return parse_stream(ANTLRFileStream(path))
+  return parse_stream(ANTLRFileStream(path, 'UTF8'))
 
 def parse_string(string):
   ''' Returns a pythonic PacketParser.
@@ -47,6 +47,8 @@ def parse_stream(stream):
   tokens = CommonTokenStream(lexer)
   parser = PacketParser(tokens)
   tree = parser.file().tree
+  if parser.getNumberOfSyntaxErrors() > 0:
+    return None
 
   return PacketObjectModel(tree)
 
@@ -87,15 +89,25 @@ class PacketObjectModel(object):  # pylint: disable=R0903
   def __init__(self, parsed_tree):
     ''' @param parsed_tree: The parsed model for the packet. '''
     self._tree = _PythonicWrapper(parsed_tree)
+    package_dict = self.__get_package_dict(self._tree)
     self.packets = []
     self.includes = []
-    self.__load_packets(self._tree)
+    self.__load_packets(self._tree, package_dict)
     self.__load_includes(self._tree)
 
-  def __load_packets(self, tree):
+  def __get_package_dict(self, tree):  #pylint: disable=R0201
+    ''' Returns the dictionary of language name to package name.'''
+    package_dict = dict()
+    for package in tree.package_list:
+      lang = package.values[0]
+      value = package.values[1][1:-1]
+      package_dict[lang] = value
+    return package_dict
+
+  def __load_packets(self, tree, package_dict):
     ''' Loads the packets from the tree. '''
     for packet in tree.packet_list:
-      self.packets.append(Packet(packet))
+      self.packets.append(Packet(packet, package_dict))
 
   def __load_includes(self, tree):
     ''' Loads the includes from the tree. '''
@@ -104,9 +116,10 @@ class PacketObjectModel(object):  # pylint: disable=R0903
 
 class Packet(object):  # pylint: disable=R0903
   ''' Represent a packet. '''
-  def __init__(self, packet):
+  def __init__(self, packet, package_dict):
     ''' @param packet: is the parsed packet structure. '''
     self.name = packet.values[0]
+    self.package_dict = package_dict
 
     # We cannot load the Packet here, because POM runs in the context of a
     self.parent = packet.extends.values[0] if packet.extends else None
@@ -139,4 +152,19 @@ class Annotation(object):  # pylint: disable=R0903
     self.name = annotation.values[0]
     self.params = []
     for param in annotation.annotation_param_list:
-      self.params.append(param.values[0])
+      self.params.append(AnnotationParam(self, param.values[0],
+                                         param.values[1]))
+
+class AnnotationParam(object): #pylint: disable=R0903
+  ''' Represents and annotation param. '''
+  def __init__(self, annotation, name, value):
+    self.annotation = annotation
+    self.name = name
+    if value.startswith('"') or value.startswith('\''):
+      self.value = value[1:-1]
+    elif value.startswith('0x'):
+      self.value = int(value, 16)
+    elif value.find('.') != -1:
+      self.value = float(value)
+    else:
+      self.value = int(value)

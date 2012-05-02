@@ -81,7 +81,7 @@ def main(argv, otherArg=None):
  * Parser rules.
  */
 file:
-  package* expr+ -> ^(FILE expr+);
+  package* expr+ -> ^(FILE package* expr+);
 
 package:
   'package' name literal SEMICOLON -> ^(PACKAGE name literal);
@@ -104,7 +104,7 @@ packet_def:
   ;
 
 parent_packet:
-  LPRAN parent_packet_name RPRAN -> ^(EXTENDS parent_packet_name)
+  LEFT_PRANTHESIS parent_packet_name RIGHT_PRANTHESIS -> ^(EXTENDS parent_packet_name)
   ;
 
 parent_packet_name:
@@ -116,21 +116,19 @@ packet_body:
    ;
 
 field:
-  sequence? annotation* field_type field_name ->
-      ^(FIELD field_name sequence? annotation* field_type)
-  ;
-
-sequence:
-  ( NUMBER ) COLON -> ^(SEQUENCE NUMBER)
+  annotation* field_type field_name ->
+      ^(FIELD field_name annotation* field_type)
   ;
 
 annotation:
-  AT IDENTIFIER annotation_param* -> ^(ANNOTATION IDENTIFIER annotation_param*)
+  AT IDENTIFIER annotation_params -> ^(ANNOTATION IDENTIFIER annotation_params)
   ;
 
+annotation_params:
+  LEFT_PRANTHESIS annotation_param ( COMMA annotation_param)* RIGHT_PRANTHESIS;
+
 annotation_param:
-  LPRAN IDENTIFIER ( COMMA IDENTIFIER )* RPRAN ->
-      ^(ANNOTATION_PARAM IDENTIFIER ( IDENTIFIER )*)
+  IDENTIFIER (EQ value)? -> ^(ANNOTATION_PARAM IDENTIFIER value?)
   ;
 
 packet_name: IDENTIFIER;
@@ -140,6 +138,8 @@ field_name: IDENTIFIER;
 field_type: IDENTIFIER -> ^(FIELD_TYPE IDENTIFIER);
 
 name: IDENTIFIER;
+
+value: literal | NUMBER;
 
 literal: LITERAL;
 
@@ -161,15 +161,13 @@ DASH: '-';
 
 DOT: '.';
 
-LPRAN: '(';
+LEFT_PRANTHESIS: '(';
 
-RPRAN: ')';
+RIGHT_PRANTHESIS: ')';
 
 LBRAC: '{';
 
 RBRAC: '}';
-
-NUMBER: ( DIGIT )+;
 
 SEMICOLON: ';';
 
@@ -182,6 +180,12 @@ UNDERSCORE: '_';
 LT: '<';
 
 GT: '>';
+
+EQ: '=';
+
+NUMBER:
+  ( DASH? (( DOT DIGIT+ ) | ( DIGIT+ (DOT DIGIT+)? ) )) | ( '0x' ( DIGIT | 'A'..'F' | 'a'..'f' )+ )
+  ;
 
 LITERAL: QOUTATION LITERAL_PART+ QOUTATION;
 
