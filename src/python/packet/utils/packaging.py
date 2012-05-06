@@ -16,6 +16,8 @@
 #
 # The GNU General Public License is contained in the file LICENSE.
 #
+''' Provides utilities for packet packages (e.g. packet path). '''
+
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
 import os
@@ -32,7 +34,7 @@ def parse_python_path(packet_path=None):
                           is empty, it will use current directory. '''
   # Use the environment variable.
   if not packet_path:
-    packet_path = os.environ[__PACKET_PATH_ENV_VARIABLE]
+    packet_path = os.environ.get(__PACKET_PATH_ENV_VARIABLE)
 
   # If none are set the default packet path is used.
   if not packet_path:

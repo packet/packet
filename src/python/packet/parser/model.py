@@ -23,25 +23,46 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 from antlr3.streams import ANTLRFileStream
 from antlr3.streams import ANTLRStringStream
 from antlr3.streams import CommonTokenStream
+import os.path
 
+import packet
 from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
+from packet.types import available_types
+from packet.utils.packaging import parse_python_path
 
-def parse_file(path):
+def parse_file(file_path, packet_path=None):
   ''' Returns a pythonic PacketParser.
-      @param path: Path to the packet file.
+      @param file_path: Path to the packet file.
       @returns POM. '''
-  return parse_stream(ANTLRFileStream(path, 'UTF8'))
+  if not packet.packet_paths:
+    packet.packet_paths = parse_python_path(packet_path)
 
-def parse_string(string):
+  for path in packet.packet_paths:
+    qualified_path = os.path.join(path, file_path)
+    if os.path.isfile(qualified_path) and os.path.exists(qualified_path):
+      file_name = os.path.basename(file_path)
+      name, ext = os.path.splitext(file_name)  #pylint: disable=W0612
+      return parse_stream(ANTLRFileStream(qualified_path, 'UTF8'), name)
+
+  return None
+
+
+
+def parse_string(string, namespace, packet_path=None):
   ''' Returns a pythonic PacketParser.
       @param string: The packet file content.
+      @param namespace: The namespace for the packet.
       @returns POM. '''
-  return parse_stream(ANTLRStringStream(string))
+  if not packet.packet_paths:
+    packet.packet_paths = parse_python_path(packet_path)
 
-def parse_stream(stream):
+  return parse_stream(ANTLRStringStream(string), namespace)
+
+def parse_stream(stream, namespace):
   ''' Returns a pythonic PacketParser.
       @param stream: The packet stream.
+      @param namespace: The namespace of the packet.
       @returns POM. '''
   lexer = PacketLexer(stream)
   tokens = CommonTokenStream(lexer)
@@ -50,7 +71,7 @@ def parse_stream(stream):
   if parser.getNumberOfSyntaxErrors() > 0:
     return None
 
-  return PacketObjectModel(tree)
+  return PacketObjectModel(tree, namespace)
 
 class _PythonicWrapper(object):  # pylint: disable=R0903
   ''' Pythonic wrapper. '''
@@ -86,14 +107,15 @@ class _PythonicWrapper(object):  # pylint: disable=R0903
 class PacketObjectModel(object):  # pylint: disable=R0903
   ''' POM (Packet Object Model) represents a file in a hierarchical structure.
   '''
-  def __init__(self, parsed_tree):
+  def __init__(self, parsed_tree, namespace):
     ''' @param parsed_tree: The parsed model for the packet. '''
     self._tree = _PythonicWrapper(parsed_tree)
-    package_dict = self.__get_package_dict(self._tree)
-    self.packets = []
-    self.includes = []
-    self.__load_packets(self._tree, package_dict)
+    self.namespace = namespace
+    self.package_dict = self.__get_package_dict(self._tree)
+    self.includes = {}
+    self.packets = {}
     self.__load_includes(self._tree)
+    self.__load_packets(self._tree)
 
   def __get_package_dict(self, tree):  #pylint: disable=R0201
     ''' Returns the dictionary of language name to package name.'''
@@ -104,52 +126,91 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       package_dict[lang] = value
     return package_dict
 
-  def __load_packets(self, tree, package_dict):
+  def __load_packets(self, tree):
     ''' Loads the packets from the tree. '''
-    for packet in tree.packet_list:
-      self.packets.append(Packet(packet, package_dict))
+    for pkt in tree.packet_list:
+      pkt_obj = Packet(self, pkt)
+      self.packets[pkt_obj.name] = pkt_obj
 
   def __load_includes(self, tree):
     ''' Loads the includes from the tree. '''
     for include in tree.include_list:
-      self.includes.append(include.values[0])
+      # TODO(soheil): May be remove <...> in the grammar.
+      included_pom = parse_file(include.values[0][1:-1])
+      if not included_pom:
+        raise Exception('Cannot find the included file: %s' % include.values[0])
+      self.includes[included_pom.namespace] = included_pom
 
+  def find_packet(self, name):
+    ''' finds a packet.
+        @param name: qualified packet name. '''
+    if not name:
+      return None
+
+    if name.find('.') == -1:
+      return self.packets.get(name)
+    else:
+      namespace = name.split('.')[0]
+      pkt = name.split('.')[1]
+      namespace_pom = self.includes.get(namespace)
+      return namespace_pom.find_packet(pkt) if namespace_pom else None
+
+# TODO(soheil): Maybe extend as Type.
 class Packet(object):  # pylint: disable=R0903
   ''' Represent a packet. '''
-  def __init__(self, packet, package_dict):
-    ''' @param packet: is the parsed packet structure. '''
-    self.name = packet.values[0]
-    self.package_dict = package_dict
+  def __init__(self, pom, pkt):
+    ''' @param pom: pkt's object model.
+        @param pkt: is the parsed packet structure.
+        '''
+    self.name = pkt.values[0]
+    self.pom = pom
 
     # We cannot load the Packet here, because POM runs in the context of a
-    self.parent = packet.extends.values[0] if packet.extends else None
+    parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
+    self.parent = pom.find_packet(parent)
 
     self.annotations = []
-    for annotation in packet.annotation_list:
-      self.annotations.append(Annotation(annotation))
+    for annotation in pkt.annotation_list:
+      self.annotations.append(Annotation(self, annotation))
 
     self.fields = []
-    for field in packet.field_list:
-      self.fields.append(Field(field))
+    for field in pkt.field_list:
+      self.fields.append(Field(self, field))
 
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''
-  def __init__(self, field):
-    ''' @param field: The parsed field. '''
+  def __init__(self, pkt, field):
+    ''' @param field: The parsed field.
+        @param pkt: The field's packet. '''
     self.name = field.values[0]
 
-    self.type = field.field_type.values[0]
+    self.packet = pkt
+    self.type = self._find_type('.'.join(field.field_type.values))
 
     # TODO(soheil): Fix sequence here.
     self.annotations = []
     for annotation in field.annotation_list:
       self.annotations.append(Annotation(annotation))
 
+  def _find_type(self, type_name):
+    ''' Finds the type. '''
+    # If it is a primitive type then return it.
+    type_obj = available_types.get(type_name)
+    if type_obj:
+      return type_obj
+    # Now, search for included packets.
+    type_obj = self.packet.pom.find_packet(type_name)
+    if not type_obj:
+      raise Exception('Type not found: %s' % type_name)
+    return type_obj
+
 class Annotation(object):  # pylint: disable=R0903
   ''' Represents an annotation. '''
-  def __init__(self, annotation):
-    ''' @param annotation: is the parsed annotation structure. '''
+  def __init__(self, pkt, annotation):
+    ''' @param annotation: is the parsed annotation structure.
+        @param pkt: annotation's packet. '''
     self.name = annotation.values[0]
+    self.packet = pkt
     self.params = []
     for param in annotation.annotation_param_list:
       self.params.append(AnnotationParam(self, param.values[0],

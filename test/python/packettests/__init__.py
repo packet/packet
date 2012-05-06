@@ -16,10 +16,6 @@
 #
 # The GNU General Public License is contained in the file LICENSE.
 #
-''' The main packet package. '''
+''' Packet unit tests. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
-
-PACKET_PATH_ENV_VAR = 'PACKET_PATH'
-
-packet_paths = []  #pylint: disable=C0103

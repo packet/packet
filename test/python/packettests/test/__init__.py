@@ -16,10 +16,12 @@
 #
 # The GNU General Public License is contained in the file LICENSE.
 #
-''' The main packet package. '''
+''' Implements the packet typing system. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
-PACKET_PATH_ENV_VAR = 'PACKET_PATH'
+import os.path
 
-packet_paths = []  #pylint: disable=C0103
+def get_packet_repo_path():
+  ''' Get packet repository path. '''
+  return os.path.join(os.path.dirname(__file__), 'packets')

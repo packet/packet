@@ -16,10 +16,13 @@
 #
 # The GNU General Public License is contained in the file LICENSE.
 #
-''' The main packet package. '''
+''' Packet configuration. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
-PACKET_PATH_ENV_VAR = 'PACKET_PATH'
-
-packet_paths = []  #pylint: disable=C0103
+class SupportedLanguages(object):  #pylint: disable=R0903
+  ''' An enumeration for languages. '''
+  C = 'C'
+  CPP = 'CPP'
+  JAVA = 'Java'
+  PYTHON = 'Python'

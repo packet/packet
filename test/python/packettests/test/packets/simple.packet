@@ -1,0 +1,11 @@
+packet Simple {
+  uint8 x;
+}
+
+packet SimpleParent {
+  char c;
+}
+
+packet AnotherSimple(SimpleParent) {
+  Simple y;
+}

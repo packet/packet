@@ -104,11 +104,12 @@ packet_def:
   ;
 
 parent_packet:
-  LEFT_PRANTHESIS parent_packet_name RIGHT_PRANTHESIS -> ^(EXTENDS parent_packet_name)
+  LEFT_PRANTHESIS parent_packet_name RIGHT_PRANTHESIS ->
+      ^(EXTENDS parent_packet_name)
   ;
 
 parent_packet_name:
-  packet_name
+  ( packet_name DOT )? packet_name
   | 'object';
 
 packet_body:
@@ -135,7 +136,8 @@ packet_name: IDENTIFIER;
 
 field_name: IDENTIFIER;
 
-field_type: IDENTIFIER -> ^(FIELD_TYPE IDENTIFIER);
+field_type: ( IDENTIFIER DOT )? IDENTIFIER ->
+    ^(FIELD_TYPE IDENTIFIER IDENTIFIER? );
 
 name: IDENTIFIER;
 
@@ -184,7 +186,7 @@ GT: '>';
 EQ: '=';
 
 NUMBER:
-  ( DASH? (( DOT DIGIT+ ) | ( DIGIT+ (DOT DIGIT+)? ) )) | ( '0x' ( DIGIT | 'A'..'F' | 'a'..'f' )+ )
+  ( DASH? ( DIGIT+ (DOT DIGIT+)? ) ) | ( '0x' ( DIGIT | 'A'..'F' | 'a'..'f' )+ )
   ;
 
 LITERAL: QOUTATION LITERAL_PART+ QOUTATION;
