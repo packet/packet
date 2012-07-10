@@ -1,6 +1,7 @@
 # Gyp output.
 build/*
 !build/packet.gyp
+!build/pre-commit
 
 # GNU Make.
 *Makefile*
