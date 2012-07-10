@@ -214,14 +214,18 @@ class Annotation(object):  # pylint: disable=R0903
     self.params = []
     for param in annotation.annotation_param_list:
       self.params.append(AnnotationParam(self, param.values[0],
-                                         param.values[1]))
+                                         param.values[1]
+                                             if len(param.values) == 2
+                                             else None))
 
 class AnnotationParam(object): #pylint: disable=R0903
   ''' Represents and annotation param. '''
   def __init__(self, annotation, name, value):
     self.annotation = annotation
     self.name = name
-    if value.startswith('"') or value.startswith('\''):
+    if value == None:
+      self.value = None
+    elif value.startswith('"') or value.startswith('\''):
       self.value = value[1:-1]
     elif value.startswith('0x'):
       self.value = int(value, 16)
@@ -229,3 +233,4 @@ class AnnotationParam(object): #pylint: disable=R0903
       self.value = float(value)
     else:
       self.value = int(value)
+
