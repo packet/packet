@@ -26,7 +26,7 @@ from unittest.runner import TextTestRunner
 from unittest.suite import TestSuite
 
 from packet.parser.model import parse_file
-from packettests.test import get_packet_repo_path
+from packettests.unit import get_packet_repo_path
 
 #pylint: disable=C0111
 
@@ -62,7 +62,7 @@ INCLUDING = {
           'namespace': 'including',
           'file': 'including.packet',
           'packets': [{
-                        'name': 'Including',
+                        'name': 'including.Including',
                         'parent': 'simple.SimpleParent',
                         'fields': [{
                                     'name': 's',

@@ -16,25 +16,7 @@
 #
 # The GNU General Public License is contained in the file LICENSE.
 #
-''' The default generator for C. '''
+''' Annotation package. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
-
-import logging
-
-from packet.generator.base import PacketGenerator
-
-LOG = logging.getLogger('packet.generator.c')
-
-class CGenerator(PacketGenerator):
-  ''' The generator for C. '''
-  paramters = []
-
-  def __init__(self):
-    super(CGenerator, self).__init__()
-
-  def generate_packet(self, packet, output_dir, opts):
-    LOG.debug('Generating C code for %s in %s' % (packet.name, output_dir))
-    pass
-
 

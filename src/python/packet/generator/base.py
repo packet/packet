@@ -23,22 +23,23 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 from abc import ABCMeta
 from abc import abstractmethod
 import logging
+import os.path
 
 from packet.parser.model import parse_file
 from packet.utils.packaging import search_for_packet
 
 LOG = logging.getLogger('packet.generator.base')
 
+RECURSIVE_OPT_NAME = 'recursive'
+
 class PacketGenerator(object):
   ''' The base class for all genrerators. All packet code generators must
       extend this class. '''
   __metaclass__ = ABCMeta
-  def __init__(self, packet_file, packet_path):
-    ''' @param packet_file: The packet file.
-        @param packet_path: The path(s) to look for packets. It's a 'colon'
-                            separated string. '''
-    self._packet_file = packet_file
-    self._packet_path = packet_path
+
+  def __init__(self):
+    self._packet_file = None
+    self._packet_path = None
     self._packets = []
 
   @property
@@ -53,17 +54,25 @@ class PacketGenerator(object):
         return (packet, packet_file)
     return None
 
-  def generate(self, output_dir, recursive=False):
+  def generate(self, packet_file, packet_path, output_dir, opts):
     ''' Geneates code based for the packet file.
         Generators: Don't override this method.
+        @param packet_file: The packet file.
+        @param packet_path: The path(s) to look for packets. It's a 'colon'
+                            separated string.
         @param output_buffer: The output directory for generators.
-        @param recursive: Generate code recursively for included packet files.
-    '''
-    self.__process_file(self._packet_file)
+        @param opts: Options for code generation. This class only respect the
+                     'recursive' value. '''
+    if not packet_file or not os.path.exists(packet_file):
+      LOG.error('No such file: ' + packet_file)
+      return
+    self._packet_file = packet_file
+    is_recursive = opts.get(RECURSIVE_OPT_NAME) == True
+    self.__process_file(packet_file)
     for packet, packet_file in self._packets:
-      if self._packet_file != packet_file and not recursive:
+      if self._packet_file != packet_file and not is_recursive:
         continue
-      self.generate_packet(packet, output_dir)
+      self.generate_packet(packet, output_dir, opts)
 
   def __process_file(self, packet_file):
     ''' Process a file, and load all packets recursively.'''
@@ -90,8 +99,9 @@ class PacketGenerator(object):
       self._packets.append((packet, packet_file))
 
   @abstractmethod
-  def generate_packet(self, packet, output_dir):
+  def generate_packet(self, packet, output_dir, opt):
     ''' Generate code for the packet.
         @param packet: The packet. 
-        @param output_dir: The output directory for generated code. '''
+        @param output_dir: The output directory for generated code.
+        @param opt: options '''
     pass

@@ -152,6 +152,9 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     else:
       namespace = name.split('.')[0]
       pkt = name.split('.')[1]
+      if namespace == self.namespace:
+        return self.packets.get(pkt)
+
       namespace_pom = self.includes.get(namespace)
       return namespace_pom.find_packet(pkt) if namespace_pom else None
 

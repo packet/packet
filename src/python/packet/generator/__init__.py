@@ -17,3 +17,24 @@
 # The GNU General Public License is contained in the file LICENSE.
 #
 ''' Basic generator classes. '''
+
+__author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
+
+from packet.generator.c import CGenerator
+
+__GENERATORS = {
+                'c': CGenerator,
+                # TODO(soheil): Implmenet this.
+                'cpp': None,
+                'java': None,
+                'python': None,
+                }
+
+def supported_languages():
+  ''' Returns the list of supported languages. '''
+  return __GENERATORS.keys()
+
+def get_generator(lang):
+  ''' Returns the generator of a specific language.
+      @param lang The language. '''
+  return __GENERATORS.get(lang)
