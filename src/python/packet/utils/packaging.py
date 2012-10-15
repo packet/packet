@@ -27,7 +27,7 @@ __DEFAULT_PACKET_PATH = '.'
 __PACKET_PATH_ENV_VARIABLE = 'PACKET_PATH'
 __PACKET_PATH_SEPARATOR = ':'
 
-def parse_python_path(packet_path=None):
+def parse_packet_path(packet_path=None):
   ''' Parses the PACKET_PATH variable, and returns a list of them.
       @param packet_path: The PACKET_PATH. If None, or empty it will use the
                           PACKET_PATH environment variable. If the env variable
@@ -51,6 +51,6 @@ def search_for_packet(packet_file, repo_paths):
   ''' Searches for a packet file in the repository paths. '''
   for repo_path in repo_paths:
     potential_file_path = path.join(repo_path, packet_file)
-    if path.exists(potential_file_path):
+    if path.exists(potential_file_path) and path.isfile(potential_file_path):
       return potential_file_path
   return None
