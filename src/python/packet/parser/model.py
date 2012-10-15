@@ -1,21 +1,21 @@
-#
+# 
 # Copyright (c) 2012, The Packet project authors. All rights reserved.
-#
+# 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details
-#
+# 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
+# 
 # The GNU General Public License is contained in the file LICENSE.
-#
+# 
 ''' Provides the POM. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
@@ -29,34 +29,26 @@ import packet
 from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
 from packet.types import available_types
-from packet.utils.packaging import parse_python_path
+from packet.utils.packaging import search_for_packet
 
-def parse_file(file_path, packet_path=None):
+
+def parse_file(file_path):
   ''' Returns a pythonic PacketParser.
       @param file_path: Path to the packet file.
       @returns POM. '''
-  if not packet.packet_paths:
-    packet.packet_paths = parse_python_path(packet_path)
+  qualified_path = search_for_packet(file_path, packet.packet_paths)
+  if not qualified_path:
+    return None
 
-  for path in packet.packet_paths:
-    qualified_path = os.path.join(path, file_path)
-    if os.path.isfile(qualified_path) and os.path.exists(qualified_path):
-      file_name = os.path.basename(file_path)
-      name, ext = os.path.splitext(file_name)  #pylint: disable=W0612
-      return parse_stream(ANTLRFileStream(qualified_path, 'UTF8'), name)
+  file_name = os.path.basename(file_path)
+  name, ext = os.path.splitext(file_name)  # pylint: disable=W0612
+  return parse_stream(ANTLRFileStream(qualified_path, 'UTF8'), name)
 
-  return None
-
-
-
-def parse_string(string, namespace, packet_path=None):
+def parse_string(string, namespace):
   ''' Returns a pythonic PacketParser.
       @param string: The packet file content.
       @param namespace: The namespace for the packet.
       @returns POM. '''
-  if not packet.packet_paths:
-    packet.packet_paths = parse_python_path(packet_path)
-
   return parse_stream(ANTLRStringStream(string), namespace)
 
 def parse_stream(stream, namespace):
@@ -117,7 +109,7 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     self.__load_includes(self._tree)
     self.__load_packets(self._tree)
 
-  def __get_package_dict(self, tree):  #pylint: disable=R0201
+  def __get_package_dict(self, tree):  # pylint: disable=R0201
     ''' Returns the dictionary of language name to package name.'''
     package_dict = dict()
     for package in tree.package_list:
@@ -150,8 +142,9 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     if name.find('.') == -1:
       return self.packets.get(name)
     else:
+      # TODO(soheil): Just one level of namespaces?
       namespace = name.split('.')[0]
-      pkt = name.split('.')[1]
+      pkt = name.split('.')[-1]
       if namespace == self.namespace:
         return self.packets.get(pkt)
 
@@ -221,7 +214,7 @@ class Annotation(object):  # pylint: disable=R0903
                                              if len(param.values) == 2
                                              else None))
 
-class AnnotationParam(object): #pylint: disable=R0903
+class AnnotationParam(object):  # pylint: disable=R0903
   ''' Represents and annotation param. '''
   def __init__(self, annotation, name, value):
     self.annotation = annotation
