@@ -16,7 +16,6 @@
 # 
 # The GNU General Public License is contained in the file LICENSE.
 # 
-from collections import OrderedDict
 ''' Provides the POM. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
@@ -24,6 +23,7 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 from antlr3.streams import ANTLRFileStream
 from antlr3.streams import ANTLRStringStream
 from antlr3.streams import CommonTokenStream
+from collections import OrderedDict
 import os.path
 
 import packet
@@ -161,10 +161,13 @@ class Packet(object):  # pylint: disable=R0903
         '''
     self.name = pkt.values[0]
     self.pom = pom
+    self.children = []
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
     self.parent = pom.find_packet(parent)
+    if self.parent:
+      self.parent.children.append(self)
 
     self.annotations = []
     for annotation in pkt.annotation_list:
