@@ -21,11 +21,13 @@
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
 from packet.generator.c import CGenerator
+from packet.generator.cpp import CppGenerator
 
+# TODO(soheil): Add styles for each language.
 __GENERATORS = {
                 'c': CGenerator,
                 # TODO(soheil): Implmenet this.
-                'cpp': None,
+                'cpp': CppGenerator,
                 'java': None,
                 'python': None,
                 }

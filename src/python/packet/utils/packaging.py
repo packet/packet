@@ -23,11 +23,10 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 import os
 from os import path
 
-__DEFAULT_PACKET_PATH = '.'
 __PACKET_PATH_ENV_VARIABLE = 'PACKET_PATH'
 __PACKET_PATH_SEPARATOR = ':'
 
-def parse_packet_path(packet_path=None):
+def get_packet_path(packet_path=None):
   ''' Parses the PACKET_PATH variable, and returns a list of them.
       @param packet_path: The PACKET_PATH. If None, or empty it will use the
                           PACKET_PATH environment variable. If the env variable
@@ -38,7 +37,7 @@ def parse_packet_path(packet_path=None):
 
   # If none are set the default packet path is used.
   if not packet_path:
-    packet_path = __DEFAULT_PACKET_PATH
+    packet_path = os.getcwd()
 
   valid_repo_paths = []
   for repo_path in packet_path.split(__PACKET_PATH_SEPARATOR):

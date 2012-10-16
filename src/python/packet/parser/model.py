@@ -16,6 +16,7 @@
 # 
 # The GNU General Public License is contained in the file LICENSE.
 # 
+from collections import OrderedDict
 ''' Provides the POM. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
@@ -104,8 +105,8 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     self._tree = _PythonicWrapper(parsed_tree)
     self.namespace = namespace
     self.package_dict = self.__get_package_dict(self._tree)
-    self.includes = {}
-    self.packets = {}
+    self.includes = OrderedDict()
+    self.packets = OrderedDict()
     self.__load_includes(self._tree)
     self.__load_packets(self._tree)
 
