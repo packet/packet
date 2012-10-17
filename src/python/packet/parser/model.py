@@ -29,7 +29,7 @@ import os.path
 import packet
 from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
-from packet.types import available_types
+from packet.types import builtin_types
 from packet.utils.packaging import search_for_packet
 
 
@@ -195,7 +195,7 @@ class Field(object):  # pylint: disable=R0903
   def _find_type(self, type_name):
     ''' Finds the type. '''
     # If it is a primitive type then return it.
-    type_obj = available_types.get(type_name)
+    type_obj = builtin_types.get(type_name)
     if type_obj:
       return type_obj
     # Now, search for included packets.

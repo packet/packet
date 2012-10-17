@@ -22,7 +22,7 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
 from abc import ABCMeta
 
-available_types = {}  #pylint: disable=C0103
+builtin_types = {}  #pylint: disable=C0103
 
 class Type(object):
   ''' The base type '''
@@ -32,7 +32,7 @@ class Type(object):
     self._name = name
     self._desc = desc
     self._length_in_bytes = length_in_bytes
-    available_types[name] = self
+    builtin_types[name] = self
 
   @property
   def name(self):  #pylint: disable=C0111

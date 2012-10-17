@@ -61,16 +61,24 @@ class CppNamingStrategy(object):
     ''' Returns the class name. '''
     return name
 
+  def get_field_name(self, name):  # pylint: disable=R0201
+    ''' Returns the field name. '''
+    return name
+
+  def get_cpptype_name(self, thetype):  # pylint: disable=R0201
+    ''' Returns the cpp type. '''
+    return thetype.name
+
   def get_enum_start(self, enum_name):
     ''' Returns the line for enum opening. '''
     return '%s %s {' % (self.__DEF_TEXTS.ENUM, enum_name)
 
-  def __get_decl_block_end(self):  # pylint: disable=C0111,W0613,R0201
+  def __get_def_block_end(self):  # pylint: disable=C0111,W0613,R0201
     return '};'
 
   def get_enum_end(self, enum_name):  # pylint: disable=W0613
     ''' Returns the enum end line. '''
-    return self.__get_decl_block_end()
+    return self.__get_def_block_end()
 
   def get_enum_element(self, enum_name, element_name):  # pylint: disable=W0613,R0201,C0301
     ''' Returns the enum element name.
@@ -79,6 +87,8 @@ class CppNamingStrategy(object):
     '''
     return element_name.upper() + ','
 
+  # TODO(soheil): Remove class_name and parent_class and pass the packet
+  #               instead.
   def get_class_def_start(self, class_name, parent_class):
     ''' Returns the start line of class definition. '''
     if parent_class:
@@ -92,7 +102,7 @@ class CppNamingStrategy(object):
 
   def get_class_def_end(self, class_name):  # pylint: disable=W0613
     ''' Returns the class definition end line. '''
-    return self.__get_decl_block_end()
+    return self.__get_def_block_end()
 
   def get_ctor_prototype(self, class_name, ctor_args):  # pylint: disable=R0201
     ''' Returns the ctor prototype. '''
@@ -126,9 +136,22 @@ class CppNamingStrategy(object):
     ''' Return the namespace end line. '''
     return '}  // %s %s' % (self.__DEF_TEXTS.NAMESPACE, namespace_name)
 
-  def get_getter_prototype(self, field_name, field_type):
+  def get_getter_prototype(self, field):
     ''' Returns the prototype for property getter. '''
-    pass
+    return '%s get_%s()' % (self.get_cpptype_name(field.type),
+                            self.get_field_name(field.name))
+
+  def get_getter_decl(self, field):
+    ''' Returns the declaration for property getter. '''
+    return self.get_getter_prototype(field) + ';'
+
+  def get_getter_def_start(self, field):
+    ''' Returns the definition start for property getter. '''
+    return self.get_getter_prototype(field) + ' {'
+
+  def get_getter_def_end(self, field):  # pylint: disable=W0613
+    ''' Returns the getter definition end. '''
+    return self.__get_def_block_end()
 
 _PACKET_WRITE_ARGS = ['size_t packet_size']
 _PACKET_READ_ARGS = ['const IoVector& io_vector', 'size_t packet_size']
@@ -304,7 +327,8 @@ class CppGenerator(PacketGenerator):
 
   def __generate_property_decls(self, packet, header_file):
     ''' Generates property declaration in the header file. '''
-    pass
+    for field in packet.fields:
+      self.__writeln(header_file, self.__naming_strategy.get_getter_decl(field))
 
   def __generate_property_defs(self, packet, source_file):
     ''' Generates property definitions in the source file. '''
