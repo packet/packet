@@ -199,16 +199,24 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     ''' Return the namespace end line. '''
     return '}  // %s %s' % (self.__DEF_TEXTS.NAMESPACE, namespace_name)
 
-  def get_getter_prototype(self, field):
-    ''' Returns the prototype for property getter. '''
-    return '%s get_%s()' % (self.get_cpptype_name(field.type),
-                            self.get_field_name(field.name))
+  def __get_method_prefix(self, field):
+    ''' Returns method prefix for definitions. '''
+    return '%s::' % self.get_class_name(field.packet.name)
 
-  def get_setter_prototype(self, field):
+
+  def get_getter_prototype(self, field, qualified=False):
+    ''' Returns the prototype for property getter. '''
+    prefix = self.__get_method_prefix(field) if qualified else ''
+    return '%s %sget_%s()' % (self.get_cpptype_name(field.type),
+                              prefix,
+                              self.get_field_name(field.name))
+
+  def get_setter_prototype(self, field, qualified=False):
     ''' Returns the prototype for property setter. '''
-    return 'void set_{0}({1} {0})'.format(self.get_field_name(field.name),
-                                          self.get_cpptype_name(field.type,
-                                              variant=_TYPE_VARIANTS.RVALUE))
+    prefix = self.__get_method_prefix(field) if qualified else ''
+    return 'void {2}set_{0}({1} {0})'.format(self.get_field_name(field.name),
+        self.get_cpptype_name(field.type, variant=_TYPE_VARIANTS.RVALUE),
+        prefix)
 
   def get_getter_decl(self, field):
     ''' Returns the declaration for property getter. '''
@@ -220,19 +228,19 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
 
   def get_getter_def_start(self, field):
     ''' Returns the definition start for property getter. '''
-    return self.get_getter_prototype(field) + ' {'
+    return self.get_getter_prototype(field, True) + ' {'
 
   def get_setter_def_start(self, field):
     ''' Returns the definition start for property setter. '''
-    return self.get_setter_prototype(field) + ' {'
+    return self.get_setter_prototype(field, True) + ' {'
 
-  def get_getter_def_end(self, field):  # pylint: disable=W0613
+  def get_getter_def_end(self, field):  # pylint: disable=W0613,R0201
     ''' Returns the getter definition end. '''
-    return self.__get_def_block_end()
+    return '}'
 
-  def get_setter_def_end(self, field):  # pylint: disable=W0613
+  def get_setter_def_end(self, field):  # pylint: disable=W0613,R0201
     ''' Returns the setter definition end. '''
-    return self.__get_def_block_end()
+    return '}'
 
 _PACKET_WRITE_ARGS = ['size_t packet_size']
 _PACKET_READ_ARGS = ['const IoVector& io_vector', 'size_t packet_size']
@@ -435,6 +443,26 @@ class CppGenerator(PacketGenerator):
       self.__writeln(header_file, self.__naming_strategy.get_getter_decl(field))
       self.__writeln(header_file, self.__naming_strategy.get_setter_decl(field))
 
+  def __generate_getter_def(self, field, source_file):
+    ''' Generates the getter definition for a field. '''
+    self.__writeln(source_file,
+                   self.__naming_strategy.get_getter_def_start(field))
+    self.__indent_in()
+    self.__indent_out()
+    self.__writeln(source_file,
+                   self.__naming_strategy.get_getter_def_end(field), True)
+
+  def __generate_setter_def(self, field, source_file):
+    ''' Generates the setter definition for a field. '''
+    self.__writeln(source_file,
+                   self.__naming_strategy.get_setter_def_start(field))
+    self.__indent_in()
+    self.__indent_out()
+    self.__writeln(source_file,
+                   self.__naming_strategy.get_setter_def_end(field), True)
+
   def __generate_property_defs(self, packet, source_file):
     ''' Generates property definitions in the source file. '''
-    pass
+    for field in packet.fields:
+      self.__generate_getter_def(field, source_file)
+      self.__generate_setter_def(field, source_file)
