@@ -22,12 +22,10 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
 import argparse
 import logging
-import os
 import sys
 
 import packet
 from packet import generator, boot_packet
-from packet import PACKET_PATH_ENV_VAR
 from packet.generator import get_generator
 from packet.generator.base import RECURSIVE_OPT_NAME
 

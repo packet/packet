@@ -25,9 +25,6 @@ from abc import abstractmethod
 import logging
 
 from packet.parser.model import parse_file
-from packet.utils.packaging import get_packet_path
-from packet.utils.packaging import search_for_packet
-
 
 LOG = logging.getLogger('packet.generator.base')
 
@@ -38,7 +35,8 @@ class PacketGenerator(object):
       extend this class. '''
   __metaclass__ = ABCMeta
 
-  def _is_recursvie(self, opts):
+  def _is_recursvie(self, opts):  # pylint: disable=R0201
+    ''' Whether the option enforces recursive generation. '''
     return opts.get(RECURSIVE_OPT_NAME) == True
 
   def generate(self, packet_file, output_dir, opts):
@@ -48,16 +46,20 @@ class PacketGenerator(object):
         @param output_buffer: The output directory for generators.
         @param opts: Options for code generation. This class only respect the
                      'recursive' value. '''
-    pom = self._process_file(packet_file)
+    poms = [self._process_file(packet_file)]
+    for pom in poms:
+      if not pom:
+        LOG.error('No such file: ' + packet_file)
+        return
 
-    if not pom:
-      LOG.error('No such file: ' + packet_file)
-      return
+      LOG.info('Generating code from %s ...' % packet_file)
+      self.generate_packet(pom, output_dir, opts)
 
-    LOG.info('Generating code from %s ...' % packet_file)
-    self.generate_packet(pom, output_dir, opts)
+      if self._is_recursvie(opts):
+        for include in pom.includes.values():
+          poms.append(include)
 
-  def _process_file(self, packet_file):
+  def _process_file(self, packet_file):  # pylint: disable=R0201
     ''' Process a file, and load all packets recursively.'''
     return parse_file(packet_file)
 

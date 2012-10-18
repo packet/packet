@@ -23,7 +23,10 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 import logging
 import os.path
 
+from packet import types
 from packet.generator.base import PacketGenerator
+from packet.types import BuiltInType
+from packet.types import VariableLengthType
 from packet.utils.types import enum
 
 LOG = logging.getLogger('packet.generator.cpp')
@@ -51,11 +54,71 @@ def _get_qualified_name(namespace, class_name):
   ''' Returns the class's qualified name. '''
   return '::%s::%s' % (namespace, class_name)
 
-class CppNamingStrategy(object):
+_TYPE_VARIANTS = enum(NONE=0, POINTER=1, REFERENCE=2, RVALUE=3)
+
+class CppTyping(object):
+  ''' Provides type name generation for the C++ generator. '''
+  def __init__(self):
+    self.__builtin_map = {}
+    self.__fill_builtin_map()
+
+  def __fill_builtin_map(self):
+    ''' Fills the built-in type map. '''
+    self.__builtin_map[types.CHAR.name] = 'char'
+    self.__builtin_map[types.INT_8.name] = 'int8_t'
+    self.__builtin_map[types.INT_16.name] = 'int16_t'
+    self.__builtin_map[types.INT_32.name] = 'int32_t'
+    self.__builtin_map[types.INT_64.name] = 'int64_t'
+
+    self.__builtin_map[types.UNSIGNED_INT_8.name] = 'uint8_t'
+    self.__builtin_map[types.UNSIGNED_INT_16.name] = 'uint16_t'
+    self.__builtin_map[types.UNSIGNED_INT_32.name] = 'uint32_t'
+    self.__builtin_map[types.UNSIGNED_INT_64.name] = 'uint64_t'
+
+  def get_cpp_type(self, packet_type, const=False, variant=_TYPE_VARIANTS.NONE):
+    ''' Returns cpp type name for any type. '''
+
+    cpp_type = None
+    builtin = isinstance(packet_type, BuiltInType)
+    if builtin:
+      cpp_type = self._get_builtin_type(packet_type)
+    elif isinstance(packet_type, VariableLengthType):
+      cpp_type = self._get_array(self.get_cpp_type(packet_type))
+    else:
+      cpp_type = _get_qualified_name(packet_type.pom.namespace,
+                                     packet_type.name)
+    if const:
+      cpp_type = 'const ' + cpp_type
+
+    # TODO(soheil): Maybe create an enum?
+    if variant == _TYPE_VARIANTS.POINTER:
+      return '%s*' % cpp_type
+    elif variant == _TYPE_VARIANTS.REFERENCE:
+      return '%s&' % cpp_type
+    elif variant == _TYPE_VARIANTS.RVALUE and not builtin:
+      return '%s&&' % cpp_type
+    else:
+      return cpp_type
+
+
+  def _get_builtin_type(self, packet_type):
+    ''' Returns cpp type name for a builtin type. '''
+    return self.__builtin_map.get(packet_type.name)
+
+  def _get_array(self, element_type):  # pylint: disable=R0201
+    ''' Returns a cpp array type that containts the element_type. '''
+    # TODO(soheil): This is not going to work this way. We need to implement
+    #               length and stuff like that.
+    return 'vector<%s>' % element_type
+
+class CppNamingStrategy(object):  # pylint: disable=R0904
   ''' Default naming strategy for C++. '''
   __DEF_TEXTS = enum(ENUM='enum class',
                      CLASS='class',
                      NAMESPACE='namespace')
+
+  def __init__(self, typing_strategy=CppTyping()):
+    self.__typing_strategy = typing_strategy
 
   def get_class_name(self, name):  # pylint: disable=R0201
     ''' Returns the class name. '''
@@ -65,9 +128,9 @@ class CppNamingStrategy(object):
     ''' Returns the field name. '''
     return name
 
-  def get_cpptype_name(self, thetype):  # pylint: disable=R0201
-    ''' Returns the cpp type. '''
-    return thetype.name
+  def get_cpptype_name(self, thetype, const=False, variant=_TYPE_VARIANTS.NONE):
+    ''' Returns the C++ type. '''
+    return self.__typing_strategy.get_cpp_type(thetype, const, variant)
 
   def get_enum_start(self, enum_name):
     ''' Returns the line for enum opening. '''
@@ -141,16 +204,34 @@ class CppNamingStrategy(object):
     return '%s get_%s()' % (self.get_cpptype_name(field.type),
                             self.get_field_name(field.name))
 
+  def get_setter_prototype(self, field):
+    ''' Returns the prototype for property setter. '''
+    return 'void set_{0}({1} {0})'.format(self.get_field_name(field.name),
+                                          self.get_cpptype_name(field.type,
+                                              variant=_TYPE_VARIANTS.RVALUE))
+
   def get_getter_decl(self, field):
     ''' Returns the declaration for property getter. '''
     return self.get_getter_prototype(field) + ';'
+
+  def get_setter_decl(self, field):
+    ''' Returns the declaration for property setter. '''
+    return self.get_setter_prototype(field) + ';'
 
   def get_getter_def_start(self, field):
     ''' Returns the definition start for property getter. '''
     return self.get_getter_prototype(field) + ' {'
 
+  def get_setter_def_start(self, field):
+    ''' Returns the definition start for property setter. '''
+    return self.get_setter_prototype(field) + ' {'
+
   def get_getter_def_end(self, field):  # pylint: disable=W0613
     ''' Returns the getter definition end. '''
+    return self.__get_def_block_end()
+
+  def get_setter_def_end(self, field):  # pylint: disable=W0613
+    ''' Returns the setter definition end. '''
     return self.__get_def_block_end()
 
 _PACKET_WRITE_ARGS = ['size_t packet_size']
@@ -167,6 +248,7 @@ class CppGenerator(PacketGenerator):
     self.__naming_strategy = naming_strategy
 
   def generate_packet(self, pom, output_dir, opts):
+    ''' Generates code for a single packet object model. '''
     LOG.debug('Generating C++ code for %s in %s' % (pom.namespace, output_dir))
     header_file, source_file = _get_output_files(pom, output_dir)
 
@@ -175,9 +257,12 @@ class CppGenerator(PacketGenerator):
                 (include, pom.namespace))
       LOG.error('Includes are not implemented yet.')
 
+    self.__generate_includes(pom, header_file, source_file)
+
     self.__open_namespace(pom, header_file, source_file)
 
     for name, packet in pom.packets.iteritems():
+      # TODO(soheil): Verify if we really need this if.
       if packet.pom.namespace != pom.namespace and not self._is_recursvie(opts):
         continue
 
@@ -226,6 +311,23 @@ class CppGenerator(PacketGenerator):
                    self.__naming_strategy.get_namespace_end(pom.namespace),
                    True)
 
+  def __get_include_str(self, include_dir,  # pylint: disable=R0201
+                        include_file):
+    ''' Return the include str, based on the to-be-included file and the base
+        directory. '''
+    return '#include "%s%s.h"' % (include_dir, include_file)
+
+  def __generate_includes(self, pom, header_file, source_file, include_dir=''):
+    ''' Generates includes in the source and header files. '''
+    includes = [include.namespace for include in pom.includes.values()]
+    for include in includes:
+      self.__writeln(header_file, self.__get_include_str(include_dir, include))
+    self.__writeln(header_file)
+
+    self.__writeln(source_file, self.__get_include_str(include_dir,
+                                                       pom.namespace), True)
+
+
   def __generate_packet(self, packet, header_file, source_file):
     ''' Generates the packet code both decls and defs. '''
     self.__open_class(packet, header_file)
@@ -236,7 +338,9 @@ class CppGenerator(PacketGenerator):
     self.__generate_constructor_decls(packet, header_file)
     self.__generate_destructor_decls(packet, header_file)
     self.__writeln(header_file)
+
     self.__generate_property_decls(packet, header_file)
+    self.__writeln(header_file)
 
     self.__start_protected_section(header_file)
 
@@ -329,6 +433,7 @@ class CppGenerator(PacketGenerator):
     ''' Generates property declaration in the header file. '''
     for field in packet.fields:
       self.__writeln(header_file, self.__naming_strategy.get_getter_decl(field))
+      self.__writeln(header_file, self.__naming_strategy.get_setter_decl(field))
 
   def __generate_property_defs(self, packet, source_file):
     ''' Generates property definitions in the source file. '''
