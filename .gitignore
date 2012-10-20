@@ -48,3 +48,7 @@ nosetests.xml
 # Vim
 *.swp
 
+# Eclipse
+.project
+.pydev*
+
