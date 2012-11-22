@@ -20,15 +20,22 @@
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
-from packet.utils.packaging import parse_packet_path
+import logging
+
+from packet.utils.packaging import get_packet_path
 
 PACKET_PATH_ENV_VAR = 'PACKET_PATH'
 
 packet_paths = []  # pylint: disable=C0103
 
-def boot_packet(packet_path=None):
+def boot_packet(packet_path=None, debug=False):
   ''' Boots the packet system. Must be called before any other call to the
       system.
       @param packet_path The packet path.'''
   global packet_paths  # pylint: disable=W0603
-  packet_paths = parse_packet_path(packet_path)
+  packet_paths = get_packet_path(packet_path)
+
+  FORMAT = '%(asctime)-15s - %(name)s (%(levelname)s) -- %(message)s'
+
+  logging.basicConfig(level=logging.DEBUG if debug else logging.INFO,
+                      format=FORMAT)

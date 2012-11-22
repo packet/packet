@@ -1,32 +1,31 @@
-#
+# 
 # Copyright (c) 2012, The Packet project authors. All rights reserved.
-#
+# 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details
-#
+# 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
+# 
 # The GNU General Public License is contained in the file LICENSE.
-#
+# 
 ''' Command line interface for generators. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
 import argparse
 import logging
-import os
 import sys
 
-from packet import generator
-from packet import PACKET_PATH_ENV_VAR
+import packet
+from packet import generator, boot_packet
 from packet.generator import get_generator
 from packet.generator.base import RECURSIVE_OPT_NAME
 
@@ -56,17 +55,13 @@ def parse_args():
 
   return parser.parse_args()
 
-def get_packet_path():
-  ''' Get the path for packet repository. '''
-  env_packet_path = os.environ.get(PACKET_PATH_ENV_VAR)
-  return env_packet_path if env_packet_path else os.getcwd()
-
 def main():
   ''' Main function for packet-gen. '''
   args = parse_args()
-  if args.verbose:
-    logging.basicConfig(level=logging.DEBUG)
-    LOG.debug('Provided arguments ' + str(args))
+
+  packet_path = args.packetpath[0]
+
+  boot_packet(packet_path, args.verbose)
 
   lang = args.lang[0]
 
@@ -77,8 +72,7 @@ def main():
     LOG.error('Cannot find the generator for %s' % lang)
     sys.exit(1)
 
-  packet_path = args.packetpath[0] if args.packetpath else get_packet_path()
-  LOG.debug('Using packet path: ' + packet_path)
+  LOG.debug('Using packet path: %s ' % str(packet.packet_paths))
 
   opts = {
           RECURSIVE_OPT_NAME: args.recursive
@@ -86,7 +80,7 @@ def main():
 
   packet_generator = packet_generator_class()
   for packet_file in args.packet:
-    packet_generator.generate(packet_file, packet_path, args.output[0], opts)
+    packet_generator.generate(packet_file, args.output[0], opts)
 
 
 if __name__ == '__main__':

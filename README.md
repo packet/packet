@@ -18,6 +18,12 @@ write the bindings. It gets even worse, when you have to support different
 languages. That's why I started the Packet project for these Odd (but important
 :P) applications.
 
+# Features
+## Polymorphism
+Packet support polymorphism as long as all the packets in the hierarchy are
+generated in the same generation pass. The behaviour is undefined when Packets
+are separately generated.
+
 # How can I use it?
 TODO(soheil): Write this part.
 

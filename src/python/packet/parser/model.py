@@ -23,12 +23,13 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 from antlr3.streams import ANTLRFileStream
 from antlr3.streams import ANTLRStringStream
 from antlr3.streams import CommonTokenStream
+from collections import OrderedDict
 import os.path
 
 import packet
 from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
-from packet.types import available_types
+from packet.types import builtin_types
 from packet.utils.packaging import search_for_packet
 
 
@@ -104,8 +105,8 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     self._tree = _PythonicWrapper(parsed_tree)
     self.namespace = namespace
     self.package_dict = self.__get_package_dict(self._tree)
-    self.includes = {}
-    self.packets = {}
+    self.includes = OrderedDict()
+    self.packets = OrderedDict()
     self.__load_includes(self._tree)
     self.__load_packets(self._tree)
 
@@ -160,10 +161,13 @@ class Packet(object):  # pylint: disable=R0903
         '''
     self.name = pkt.values[0]
     self.pom = pom
+    self.children = []
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
     self.parent = pom.find_packet(parent)
+    if self.parent:
+      self.parent.children.append(self)
 
     self.annotations = []
     for annotation in pkt.annotation_list:
@@ -191,7 +195,7 @@ class Field(object):  # pylint: disable=R0903
   def _find_type(self, type_name):
     ''' Finds the type. '''
     # If it is a primitive type then return it.
-    type_obj = available_types.get(type_name)
+    type_obj = builtin_types.get(type_name)
     if type_obj:
       return type_obj
     # Now, search for included packets.
