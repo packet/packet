@@ -1,0 +1,50 @@
+<%inherit file="cpp-base.template" />\
+<%!
+  from packet.generator.cpp import BuiltInType
+%>\
+<%block name="header">\
+${parent.header()}
+
+% for packet in pom.includes.values():
+${self.include(packet.namespace)}
+% endfor
+${self.include(pom.namespace)}
+</%block>\
+
+% for name, packet in pom.packets.iteritems():
+<%
+  cpp_class_name = self.class_name(packet)
+  cpp_parent_class = self.get_parent(packet)
+%>\
+
+${cpp_class_name}::${cpp_class_name}(size_t packet_size) {
+}
+
+${cpp_class_name}::${cpp_class_name}(const IoVector& io_vector,
+    size_t packet_size) {
+}
+
+${cpp_class_name}::~${cpp_class_name}() {
+}
+
+% for field in packet.fields:
+<%
+  cpp_type_name = self.cpp_naming.get_cpptype_name(field.type)
+%>\
+${self.getter_prototype(field, qualified=True)} {
+  auto offset = this->${self.offset_method_name(field)}();
+  return this->get_vector().read_data<${cpp_type_name}>(offset);
+}
+
+${self.setter_prototype(field, qualified=True)} {
+  auto offset = this->${self.offset_method_name(field)}();
+  this->get_vector().write_data<${cpp_type_name}>(${field.name}, offset);
+}
+% endfor
+
+% for field in packet.fields:
+${self.offset_prototype(field, qualified=True)} {
+}
+% endfor
+
+% endfor

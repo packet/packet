@@ -1,21 +1,21 @@
-# 
+#
 # Copyright (c) 2012, The Packet project authors. All rights reserved.
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# 
+#
 # The GNU General Public License is contained in the file LICENSE.
-# 
+#
 ''' The default generator for C++. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
@@ -28,6 +28,9 @@ from packet.generator.base import PacketGenerator
 from packet.types import BuiltInType
 from packet.types import VariableLengthType
 from packet.utils.types import enum
+
+from mako.lookup import TemplateLookup
+
 
 LOG = logging.getLogger('packet.generator.cpp')
 
@@ -54,7 +57,7 @@ def _get_qualified_name(namespace, class_name):
   ''' Returns the class's qualified name. '''
   return '::%s::%s' % (namespace, class_name)
 
-_TYPE_VARIANTS = enum(NONE=0, POINTER=1, REFERENCE=2, RVALUE=3)
+TYPE_VARIANTS = enum(NONE=0, POINTER=1, REFERENCE=2, RVALUE=3)
 
 class CppTyping(object):
   ''' Provides type name generation for the C++ generator. '''
@@ -75,7 +78,7 @@ class CppTyping(object):
     self.__builtin_map[types.UNSIGNED_INT_32.name] = 'uint32_t'
     self.__builtin_map[types.UNSIGNED_INT_64.name] = 'uint64_t'
 
-  def get_cpp_type(self, packet_type, const=False, variant=_TYPE_VARIANTS.NONE):
+  def get_cpp_type(self, packet_type, const=False, variant=TYPE_VARIANTS.NONE):
     ''' Returns cpp type name for any type. '''
 
     cpp_type = None
@@ -91,15 +94,14 @@ class CppTyping(object):
       cpp_type = 'const ' + cpp_type
 
     # TODO(soheil): Maybe create an enum?
-    if variant == _TYPE_VARIANTS.POINTER:
+    if variant == TYPE_VARIANTS.POINTER:
       return '%s*' % cpp_type
-    elif variant == _TYPE_VARIANTS.REFERENCE:
+    elif variant == TYPE_VARIANTS.REFERENCE:
       return '%s&' % cpp_type
-    elif variant == _TYPE_VARIANTS.RVALUE and not builtin:
+    elif variant == TYPE_VARIANTS.RVALUE and not builtin:
       return '%s&&' % cpp_type
     else:
       return cpp_type
-
 
   def _get_builtin_type(self, packet_type):
     ''' Returns cpp type name for a builtin type. '''
@@ -128,7 +130,7 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     ''' Returns the field name. '''
     return name
 
-  def get_cpptype_name(self, thetype, const=False, variant=_TYPE_VARIANTS.NONE):
+  def get_cpptype_name(self, thetype, const=False, variant=TYPE_VARIANTS.NONE):
     ''' Returns the C++ type. '''
     return self.__typing_strategy.get_cpp_type(thetype, const, variant)
 
@@ -184,7 +186,7 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     return self.get_ctor_prototype(class_name, ctor_args) + ';'
 
   def get_ctor_def_start(self, class_name, ctor_args):
-    ''' Returns the constructor decleration line. '''
+    ''' Returns the constructor declaration line. '''
     return self.get_ctor_prototype(class_name, ctor_args) + ' {'
 
   def get_dtor_decl(self, class_name):
@@ -215,7 +217,7 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     ''' Returns the prototype for property setter. '''
     prefix = self.__get_method_prefix(field) if qualified else ''
     return 'void {2}set_{0}({1} {0})'.format(self.get_field_name(field.name),
-        self.get_cpptype_name(field.type, variant=_TYPE_VARIANTS.RVALUE),
+        self.get_cpptype_name(field.type, variant=TYPE_VARIANTS.RVALUE),
         prefix)
 
   def get_getter_decl(self, field):
@@ -242,6 +244,27 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     ''' Returns the setter definition end. '''
     return '}'
 
+  def get_offset_method(self, field):  # pylint: disable=W0613,R0201
+    ''' Returns the for the offset calculation method. '''
+    return 'get_%s_offset' % field.name
+
+  def get_offset_method_prototype(self, field):
+    ''' Returns the prototype of the field's offset calculation method. '''
+    return 'size_t %s()' % self.get_offset_method(field)
+
+  def get_offset_method_decl(self, field):
+    ''' Returns the declaration of the field's offset calculation method. '''
+    return self.get_offset_method_prototype(field) + ';'
+
+  def get_offset_method_def_start(self, field):
+    ''' Returns definition start for field's offset calculation method. '''
+    return self.get_offset_method_prototype(field) + ' {'
+
+  def get_offset_method_def_stop(self, field):  # pylint: disable=W0613,R0201
+    ''' Returns definition end for field's offset calculation method. '''
+    return '}'
+
+
 _PACKET_WRITE_ARGS = ['size_t packet_size']
 _PACKET_READ_ARGS = ['const IoVector& io_vector', 'size_t packet_size']
 
@@ -255,32 +278,30 @@ class CppGenerator(PacketGenerator):
     self.__indent_width = 2
     self.__naming_strategy = naming_strategy
 
-  def generate_packet(self, pom, output_dir, opts):
+  def generate_packet(self, pom, output_dir, opts):  # pylint: disable=W0613
     ''' Generates code for a single packet object model. '''
-    LOG.debug('Generating C++ code for %s in %s' % (pom.namespace, output_dir))
     header_file, source_file = _get_output_files(pom, output_dir)
+    LOG.debug('Generating C++ code for %s in %s' % (pom.namespace, output_dir))
 
-    for include in pom.includes:
-      LOG.debug('Adding included packet %s to %s ...' %
-                (include, pom.namespace))
-      LOG.error('Includes are not implemented yet.')
+    template_path = self.__get_template_path()
+    template_lookup = TemplateLookup(directories=[template_path],
+                                     module_directory='/tmp/mako_modules')
 
-    self.__generate_includes(pom, header_file, source_file)
-
-    self.__open_namespace(pom, header_file, source_file)
-
-    for name, packet in pom.packets.iteritems():
-      # TODO(soheil): Verify if we really need this if.
-      if packet.pom.namespace != pom.namespace and not self._is_recursvie(opts):
-        continue
-
-      LOG.debug('Visiting packet: %s' % name)
-      self.__generate_packet(packet, header_file, source_file)
-
-    self.__close_namespace(pom, header_file, source_file)
-
+    header_template = template_lookup.get_template('cpp-header.template')
+    self.__writeln(header_file,
+                   header_template.render(pom=pom, include_prefix='').strip(),
+                   True)
     header_file.close()
+
+    src_template = template_lookup.get_template('cpp-source.template')
+    self.__writeln(source_file,
+                   src_template.render(pom=pom, include_prefix='').strip(),
+                   True)
     source_file.close()
+
+  def __get_template_path(self):  # pylint: disable=R0201
+    ''' Returns the template repository path. '''
+    return os.path.join(os.path.dirname(__file__), 'templates', 'cpp')
 
   def __writeln(self, output, text='', append_with_a_newline=False):
     ''' Writes a text in the output according to the indentation level.
@@ -342,6 +363,7 @@ class CppGenerator(PacketGenerator):
     self.__indent_in()
 
     self.__start_public_section(header_file)
+
     self.__generate_subtypes(packet, header_file)
     self.__generate_constructor_decls(packet, header_file)
     self.__generate_destructor_decls(packet, header_file)
@@ -351,6 +373,9 @@ class CppGenerator(PacketGenerator):
     self.__writeln(header_file)
 
     self.__start_protected_section(header_file)
+
+    self.__generate_prop_offset_decls(packet, header_file)
+    self.__writeln(header_file)
 
     self.__start_private_section(header_file)
 
@@ -443,11 +468,30 @@ class CppGenerator(PacketGenerator):
       self.__writeln(header_file, self.__naming_strategy.get_getter_decl(field))
       self.__writeln(header_file, self.__naming_strategy.get_setter_decl(field))
 
+  def __generate_prop_offset_decls(self, packet, header_file):
+    ''' Generates property declaration in the header file. '''
+    for field in packet.fields:
+      self.__writeln(header_file,
+                     self.__naming_strategy.get_offset_method_decl(field))
+
   def __generate_getter_def(self, field, source_file):
     ''' Generates the getter definition for a field. '''
     self.__writeln(source_file,
                    self.__naming_strategy.get_getter_def_start(field))
     self.__indent_in()
+    self.__writeln(source_file, 'auto offset = this->%s();' %
+                   self.__naming_strategy.get_offset_method(field))
+    if isinstance(field.type, BuiltInType):
+      self.__writeln(source_file,
+                     'auto value = this->get_vector().read_data<%s>(offset);' %
+                     self.__naming_strategy.get_cpptype_name(field.type))
+    else:
+      self.__writeln(source_file,
+                     'auto value = ::cyrus::packet::make_packet<%s>(' \
+                     'this->get_vector(), offset);' %
+                     self.__naming_strategy.get_cpptype_name(field.type))
+
+    # TODO(soheil): add impl.
     self.__indent_out()
     self.__writeln(source_file,
                    self.__naming_strategy.get_getter_def_end(field), True)
