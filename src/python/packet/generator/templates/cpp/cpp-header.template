@@ -36,6 +36,10 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 % endfor
 
  private:
+% for field in packet.fields:
+  ${self.static_getter_decl(field)}
+  ${self.static_setter_decl(field)}
+% endfor
 };
 
 % endfor
@@ -44,8 +48,16 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 ${self.getter_prototype(field)};
 </%def>\
 \
+<%def name="static_getter_decl(field)" buffered="True" filter="trim">
+${self.static_getter_prototype(field)};
+</%def>\
+\
 <%def name="setter_decl(field)" buffered="True" filter="trim">
 ${self.setter_prototype(field)};
+</%def>\
+\
+<%def name="static_setter_decl(field)" buffered="True" filter="trim">
+${self.static_setter_prototype(field)};
 </%def>\
 \
 <%def name="offset_decl(field)" buffered="True" filter="trim">

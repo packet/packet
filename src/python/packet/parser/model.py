@@ -1,24 +1,26 @@
-# 
+#
 # Copyright (c) 2012, The Packet project authors. All rights reserved.
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# 
+#
 # The GNU General Public License is contained in the file LICENSE.
-# 
+#
 ''' Provides the POM. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
+
+import logging
 
 from antlr3.streams import ANTLRFileStream
 from antlr3.streams import ANTLRStringStream
@@ -31,6 +33,9 @@ from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
 from packet.types import builtin_types
 from packet.utils.packaging import search_for_packet
+
+
+LOG = logging.getLogger('packet.parser.model')
 
 
 def parse_file(file_path):
@@ -62,6 +67,7 @@ def parse_stream(stream, namespace):
   parser = PacketParser(tokens)
   tree = parser.file().tree
   if parser.getNumberOfSyntaxErrors() > 0:
+    LOG.error('Unable to parse stream')
     return None
 
   return PacketObjectModel(tree, namespace)
@@ -169,9 +175,10 @@ class Packet(object):  # pylint: disable=R0903
     if self.parent:
       self.parent.children.append(self)
 
-    self.annotations = []
+    self.annotations = {}
     for annotation in pkt.annotation_list:
-      self.annotations.append(Annotation(self, annotation))
+      annotation = Annotation(self, annotation)
+      self.annotations[annotation.name] = annotation
 
     self.fields = []
     for field in pkt.field_list:

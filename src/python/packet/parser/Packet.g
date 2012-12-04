@@ -57,8 +57,13 @@ tokens {
 # The GNU General Public License is contained in the file LICENSE.
 #
 
+import logging
 import sys
 import traceback
+
+
+LOG = logging.getLogger('packet.parser.PacketParser')
+
 
 from PacketLexer import PacketLexer
 
@@ -75,6 +80,15 @@ def main(argv, otherArg=None):
     parser.file()
   except RecognitionException:
     traceback.print_stack()
+}
+
+@members {
+def displayRecognitionError(self, tokenNames, e):
+  hdr = self.getErrorHeader(e)
+  msg = self.getErrorMessage(e, tokenNames)
+  LOG.error(hdr + ' ' + msg)
+
+BaseRecognizer.displayRecognitionError = displayRecognitionError
 }
 
 /*
@@ -122,7 +136,7 @@ field:
   ;
 
 annotation:
-  AT IDENTIFIER annotation_params -> ^(ANNOTATION IDENTIFIER annotation_params)
+  AT IDENTIFIER annotation_params? -> ^(ANNOTATION IDENTIFIER annotation_params?)
   ;
 
 annotation_params:

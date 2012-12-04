@@ -32,12 +32,20 @@ ${cpp_class_name}::~${cpp_class_name}() {
   cpp_type_name = self.cpp_naming.get_cpptype_name(field.type)
 %>\
 ${self.getter_prototype(field, qualified=True)} {
-  auto offset = this->${self.offset_method_name(field)}();
+  return ${cpp_class_name}::${self.static_getter_name(field)}(vector, packet_size);
+}
+
+${self.static_getter_prototype(field, qualified=True)} {
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(vector, packet_size);
   return this->get_vector().read_data<${cpp_type_name}>(offset);
 }
 
 ${self.setter_prototype(field, qualified=True)} {
-  auto offset = this->${self.offset_method_name(field)}();
+  return ${cpp_class_name}::${self.static_setter_name(field)}(vector, packet_size);
+}
+
+${self.static_setter_prototype(field, qualified=True)} {
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(vector, packet_size);
   this->get_vector().write_data<${cpp_type_name}>(${field.name}, offset);
 }
 % endfor
@@ -47,4 +55,27 @@ ${self.offset_prototype(field, qualified=True)} {
 }
 % endfor
 
+template<>
+${cpp_class_name} make_packet<${cpp_class_name}>(const IoVector& io_vec, size_t packet_size) {
+  % for p in packet.children:
+  if (${self.type_selector_cond(p)}) {
+    return make_packet<${self.class_name(p)}>(io_vec, packet_size);
+  }
+  % endfor
+  return ${cpp_class_name}(io_vec, packet_size);
+}
+
 % endfor
+
+<%def name="type_selector_cond(packet)" buffered="True" filter="trim">
+  <%
+    annot = packet.annotations.get('type_selector')
+    assert annot, 'Type selector cannot be empty for %s' % packet.name
+  %>
+  % if annot:
+    % for param in annot.params:
+     ${self.class_name(packet.parent)}::${self.static_getter_name(param)}(io_vec, packet_size) == ${param.value}
+    % endfor
+  % endif
+</%def>
+
