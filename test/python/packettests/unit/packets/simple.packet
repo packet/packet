@@ -6,6 +6,7 @@ packet SimpleParent {
   char c;
 }
 
+@type_selector(x=1)
 packet AnotherSimple(SimpleParent) {
   Simple y;
 }

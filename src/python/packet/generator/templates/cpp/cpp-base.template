@@ -51,9 +51,9 @@ ${self.body()}
 #include "${include_prefix + namespace}.h"\
 </%def>
 
-<%def name="method_prototype(const=False, qualified=False)" buffered="True"
-      filter="trim">
-  ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
+<%def name="method_prototype(const=False, qualified=False, static=False)"
+      buffered="True" filter="trim">
+  ${'static' if static else ''} ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
 </%def>
 
 <%def name="getter_prototype(field, qualified=False)" buffered="True"
@@ -69,6 +69,28 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim" />
+  </%self:method_prototype>
+</%def>
+
+<%def name="static_getter_name(field)" buffered="True" filter="trim">
+  get_${field.name}_
+</%def>
+
+<%def name="static_getter_prototype(field, qualified=False)" buffered="True"
+      filter="trim">
+  <%self:method_prototype qualified="${qualified}" const="True" static="True">
+    <%def name="return_type()" filter="trim">
+      ${self.type_name(field.type)}
+    </%def>
+    <%def name="method_name()" filter="trim">
+      ${self.static_getter_name(field)}
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(field.packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+      const IoVector& io_vector, size_t size
+    </%def>
   </%self:method_prototype>
 </%def>
 
@@ -89,13 +111,34 @@ ${self.body()}
   </%self:method_prototype>
 </%def>
 
+<%def name="static_setter_name(field)" buffered="True" filter="trim">
+  set_${field.name}_
+</%def>
+
+<%def name="static_setter_prototype(field, qualified=False)" buffered="True" filter="trim">
+  <%self:method_prototype qualified="${qualified}" static="True">
+    <%def name="return_type()" filter="trim">
+      void
+    </%def>
+    <%def name="method_name()" filter="trim">
+      ${self.static_setter_name(field)}
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(field.packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, const IoVector& io_vector, size_t size
+    </%def>
+  </%self:method_prototype>
+</%def>
+
 <%def name="offset_method_name(field)" buffered="True" filter="trim">
   get_${field.name}_offset
 </%def>
 
 <%def name="offset_prototype(field, qualified=False)" buffered="True"
       filter="trim">
-  <%self:method_prototype qualified="${qualified}" const="True">
+  <%self:method_prototype qualified="${qualified}" const="True" static="True">
     <%def name="return_type()" filter="trim">
       size_t
     </%def>
@@ -105,6 +148,8 @@ ${self.body()}
     <%def name="class_name()" filter="trim">
       ${self.class_name(field.packet)}
     </%def>
-    <%def name="args()" filter="trim" />
+    <%def name="args()" filter="trim">
+      const IoVector& io_vector, size_t size
+    </%def>
   </%self:method_prototype>
 </%def>
