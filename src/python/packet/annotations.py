@@ -31,6 +31,14 @@ def packet_level_annotation(name):
     return klass
   return pkt_annt_decorator
 
+def field_level_annotation(name):
+  ''' Decorator for field level annotation. '''
+  def fld_annt_decorator(klass):
+    ''' Puts the class in the field level dictionary. '''
+    __field_level_annotations[name] = klass
+    return klass
+  return fld_annt_decorator
+
 class Annotation(object):  # pylint: disable=R0903
   ''' Annotations representing the processor part of . '''
   def __init__(self, model):
@@ -94,3 +102,22 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
         raise Exception('Field of type_selector not found: %s' % param.name)
       cond.append((field, param.value))
     return cond
+
+@field_level_annotation('length')  # pylint: disable=R0903
+class LengthAnnotation(FieldLevelAnnotation):
+  ''' The length annotation is used for the field storing the length of its
+      packet or another field. In the latter case, user need to pass the field
+      name as the parameter (e.g., @length(field)). We set length_field in the
+      respective packet/field.
+      Note: length cannot be overriden in the child classes. '''
+  def __init__(self, field, model):
+    FieldLevelAnnotation.__init__(self, field, model)
+    assert len(model.params) <= 1, \
+        '@length can have at most one parameter: %s' % field.name
+    if len(model.params) == 1:
+      # TODO(soheil): We need to make sure that the field is a vector
+      referencing_field = field.packet.find_field(model.params[0].name)
+      referencing_field.length_field = field
+    else:
+      field.packet.length_field = field
+

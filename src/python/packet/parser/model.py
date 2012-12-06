@@ -170,6 +170,7 @@ class Packet(object):  # pylint: disable=R0903
     self.name = pkt.values[0]
     self.pom = pom
     self.children = []
+    self.length_field = None
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
@@ -203,9 +204,10 @@ class Field(object):  # pylint: disable=R0903
 
     self.packet = pkt
     self.type = self._find_type('.'.join(field.field_type.values))
+    self.offset = [0, ()]
 
     # TODO(soheil): Fix sequence here.
-    self.annotations = []
+    self.annotations = {}
     for annotation in field.annotation_list:
       annot_obj = Annotation(annotation)
       self.annotations[annot_obj.name] = \

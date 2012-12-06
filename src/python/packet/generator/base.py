@@ -24,6 +24,8 @@ from abc import ABCMeta
 from abc import abstractmethod
 import logging
 
+from packet.generator.processor import LengthProcessor
+from packet.generator.processor import OffsetProcessor
 from packet.parser.model import parse_file
 
 LOG = logging.getLogger('packet.generator.base')
@@ -35,7 +37,7 @@ class PacketGenerator(object):
       extend this class. '''
   __metaclass__ = ABCMeta
   def __init__(self):
-    self._pipeline = []
+    self._pipeline = [OffsetProcessor(), LengthProcessor()]
 
   def _is_recursvie(self, opts):  # pylint: disable=R0201
     ''' Whether the option enforces recursive generation. '''
