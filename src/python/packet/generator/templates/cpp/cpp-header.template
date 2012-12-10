@@ -30,6 +30,8 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   ${self.setter_decl(field)}
 % endfor
 
+  ${self.get_size_decl(packet)}
+
  protected:
 % for field in packet.fields:
   ${self.offset_decl(field)}
@@ -62,4 +64,9 @@ ${self.static_setter_prototype(field)};
 \
 <%def name="offset_decl(field)" buffered="True" filter="trim">
 ${self.offset_prototype(field)};
-</%def>
+</%def>\
+\
+<%def name="get_size_decl(packet)" buffered="True" filter="trim">
+${self.get_size_prototype(packet)};
+</%def>\
+

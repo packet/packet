@@ -89,7 +89,7 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const IoVector& io_vector, size_t size
+      const IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -127,7 +127,7 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, const IoVector& io_vector, size_t size
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, const IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -149,7 +149,25 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const IoVector& io_vector, size_t size
+      const IoVector& io_vector
+    </%def>
+  </%self:method_prototype>
+</%def>
+
+<%def name="get_size_prototype(packet, qualified=False)" buffered="True"
+      filter="trim">
+  <%self:method_prototype qualified="${qualified}" const="True" static="True">
+    <%def name="return_type()" filter="trim">
+      size_t
+    </%def>
+    <%def name="method_name()" filter="trim">
+      get_size
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+      const IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>

@@ -1,6 +1,6 @@
 include <simple.packet>;
 
-@type_selector(x=2)
+@type_selector(c=2)
 packet Including(simple.SimpleParent) {
   simple.Simple s;
 }

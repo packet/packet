@@ -4,9 +4,10 @@ packet Simple {
 
 packet SimpleParent {
   char c;
+  @length uint8 l;
 }
 
-@type_selector(x=1)
+@type_selector(c=1)
 packet AnotherSimple(SimpleParent) {
   Simple y;
 }

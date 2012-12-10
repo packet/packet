@@ -29,6 +29,8 @@ from collections import OrderedDict
 import os.path
 
 import packet
+from packet.annotations import create_packet_level_annotation
+from packet.annotations import create_field_level_annotation
 from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
 from packet.types import builtin_types
@@ -168,6 +170,7 @@ class Packet(object):  # pylint: disable=R0903
     self.name = pkt.values[0]
     self.pom = pom
     self.children = []
+    self.length_field = None
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
@@ -177,12 +180,20 @@ class Packet(object):  # pylint: disable=R0903
 
     self.annotations = {}
     for annotation in pkt.annotation_list:
-      annotation = Annotation(self, annotation)
-      self.annotations[annotation.name] = annotation
+      annot_obj = Annotation(annotation)
+      self.annotations[annot_obj.name] = \
+          create_packet_level_annotation(self, annot_obj)
 
     self.fields = []
     for field in pkt.field_list:
       self.fields.append(Field(self, field))
+
+  def find_field(self, name):
+    ''' Find the field matching the field name. '''
+    for field in self.fields:
+      if field.name == name:
+        return field
+    return None
 
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''
@@ -193,11 +204,14 @@ class Field(object):  # pylint: disable=R0903
 
     self.packet = pkt
     self.type = self._find_type('.'.join(field.field_type.values))
+    self.offset = [0, ()]
 
     # TODO(soheil): Fix sequence here.
-    self.annotations = []
+    self.annotations = {}
     for annotation in field.annotation_list:
-      self.annotations.append(Annotation(annotation))
+      annot_obj = Annotation(annotation)
+      self.annotations[annot_obj.name] = \
+          create_field_level_annotation(self, annot_obj)
 
   def _find_type(self, type_name):
     ''' Finds the type. '''
@@ -213,11 +227,9 @@ class Field(object):  # pylint: disable=R0903
 
 class Annotation(object):  # pylint: disable=R0903
   ''' Represents an annotation. '''
-  def __init__(self, pkt, annotation):
-    ''' @param annotation: is the parsed annotation structure.
-        @param pkt: annotation's packet. '''
+  def __init__(self, annotation):
+    ''' @param annotation: is the parsed annotation structure. '''
     self.name = annotation.values[0]
-    self.packet = pkt
     self.params = []
     for param in annotation.annotation_param_list:
       self.params.append(AnnotationParam(self, param.values[0],

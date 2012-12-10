@@ -35,7 +35,8 @@ def boot_packet(packet_path=None, debug=False):
   global packet_paths  # pylint: disable=W0603
   packet_paths = get_packet_path(packet_path)
 
-  FORMAT = '%(asctime)-15s - %(name)s (%(levelname)s) -- %(message)s'
+  fmt = '%(asctime)-15s - %(name)s (%(levelname)s) -- %(message)s'
 
   logging.basicConfig(level=logging.DEBUG if debug else logging.INFO,
-                      format=FORMAT)
+                      format=fmt)
+
