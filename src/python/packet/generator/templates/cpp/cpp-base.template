@@ -21,13 +21,14 @@ ${self.body()}
 </%block>
 
 <%block name="footer" />
+
 <%def name="namespace_name(pom)" buffered="True" filter="trim">
   ${pom.namespace}
 </%def>
 
 <%def name="class_name(packet, qualified=False)" buffered="True" filter="trim">
 % if qualified:
-  ::${namespace_name(packet.pom)}::${packet.name}
+  ${namespace_name(packet.pom)}::${packet.name}
 % else:
   ${self.cpp_naming.get_class_name(packet.name)}
 % endif
@@ -42,8 +43,15 @@ ${self.body()}
 % if packet.parent:
   ${self.class_name(packet.parent, qualified=True)}
 % else:
-  ::cyrus::io::Packet
+  cyrus::io::Packet
 % endif
+</%def>
+
+<%def name="common_include()" buffered="True" filter="trim">
+#include <memory>
+#include <utility>
+
+#include "cyrus/iolib/io.h"
 </%def>
 
 <%def name="include(namespace, include_prefix='')" buffered="True"
@@ -53,7 +61,7 @@ ${self.body()}
 
 <%def name="method_prototype(const=False, qualified=False, static=False)"
       buffered="True" filter="trim">
-  ${'static' if static else ''} ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
+  ${'static' if static and not qualified else ''} ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
 </%def>
 
 <%def name="getter_prototype(field, qualified=False)" buffered="True"
@@ -78,7 +86,7 @@ ${self.body()}
 
 <%def name="static_getter_prototype(field, qualified=False)" buffered="True"
       filter="trim">
-  <%self:method_prototype qualified="${qualified}" const="True" static="True">
+  <%self:method_prototype qualified="${qualified}" static="True">
     <%def name="return_type()" filter="trim">
       ${self.type_name(field.type)}
     </%def>
@@ -89,7 +97,7 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const IoVector& io_vector
+      const cyrus::io::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -127,7 +135,7 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, const IoVector& io_vector
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -138,7 +146,7 @@ ${self.body()}
 
 <%def name="offset_prototype(field, qualified=False)" buffered="True"
       filter="trim">
-  <%self:method_prototype qualified="${qualified}" const="True" static="True">
+  <%self:method_prototype qualified="${qualified}" static="True">
     <%def name="return_type()" filter="trim">
       size_t
     </%def>
@@ -149,14 +157,14 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const IoVector& io_vector
+      const cyrus::io::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
 
 <%def name="get_size_prototype(packet, qualified=False)" buffered="True"
       filter="trim">
-  <%self:method_prototype qualified="${qualified}" const="True" static="True">
+  <%self:method_prototype qualified="${qualified}" static="True">
     <%def name="return_type()" filter="trim">
       size_t
     </%def>
@@ -167,7 +175,7 @@ ${self.body()}
       ${self.class_name(packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const IoVector& io_vector
+      const cyrus::io::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>

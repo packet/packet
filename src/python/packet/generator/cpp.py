@@ -55,7 +55,7 @@ def _get_output_files(pom, output_dir):
 
 def _get_qualified_name(namespace, class_name):
   ''' Returns the class's qualified name. '''
-  return '::%s::%s' % (namespace, class_name)
+  return '%s::%s' % (namespace, class_name)
 
 TYPE_VARIANTS = enum(NONE=0, POINTER=1, REFERENCE=2, RVALUE=3)
 
