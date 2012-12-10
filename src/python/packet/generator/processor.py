@@ -53,6 +53,7 @@ class OffsetProcessor(ModelProcessor):
     if packet.parent:
       offset_constant, intermediate_fields = self._calculate_offset(
           packet.parent)
+
     for field in packet.fields:
       if isinstance(field.type, BuiltInType):
         offset_constant = offset_constant + field.type.length_in_bytes
@@ -66,6 +67,7 @@ class OffsetProcessor(ModelProcessor):
         fields. For example, an offset of (2, [x, y]) means: 2 + x.len + y.len
         bytes. '''
     offset_constant, intermediate_fields = self._calculate_offset(packet.parent)
+    print packet.name, packet.parent, offset_constant, intermediate_fields
     for field in packet.fields:
       field.offset = (offset_constant, list(intermediate_fields))
       if isinstance(field.type, BuiltInType):
@@ -73,27 +75,27 @@ class OffsetProcessor(ModelProcessor):
       else:
         intermediate_fields.append(field)
 
-class LengthProcessor(ModelProcessor):
-  ''' Validates packets and makes sure they have a length field, and it is not
+class SizeProcessor(ModelProcessor):
+  ''' Validates packets and makes sure they have a size field, and it is not
       overriden in any derived packets. '''
   def process(self, model):
     for packet in model.packets.values():
-      self._set_length(packet)
+      self._set_size(packet)
 
-  def _set_length(self, packet):  # pylint: disable=R0201
-    ''' Validates and sets length in all dervied packets. '''
+  def _set_size(self, packet):  # pylint: disable=R0201
+    ''' Validates and sets size in all dervied packets. '''
     if not packet:
       return
 
-    if packet.length_field:
+    if packet.size_field:
       if packet.parent:
-        assert packet.length_field == packet.parent.length_field, \
-               'Dervied packet cannot override length field: %s' % packet.name
+        assert packet.size_field == packet.parent.size_field, \
+               'Dervied packet cannot override size field: %s' % packet.name
       return
 
-    if not packet.length_field:
-      assert packet.parent, 'Packet does not have any length field: %s' % \
+    if not packet.size_field:
+      assert packet.parent, 'Packet does not have any size field: %s' % \
                             packet.name
-      self._set_length(packet.parent)
-      packet.length_field = packet.parent.length_field
+      self._set_size(packet.parent)
+      packet.size_field = packet.parent.size_field
 

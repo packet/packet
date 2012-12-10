@@ -1,10 +1,10 @@
 packet Simple {
-  uint8 x;
+  @size uint8 x;
 }
 
 packet SimpleParent {
   char c;
-  @length uint8 l;
+  @size uint8 l;
 }
 
 @type_selector(c=1)

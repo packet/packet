@@ -52,11 +52,15 @@ ${self.static_setter_prototype(field, qualified=True)} {
 
 % for field in packet.fields:
 ${self.offset_prototype(field, qualified=True)} {
+  % if field.offset[1]:
+  Variable offset not supported yet!
+  % endif
+  return ${field.offset[0]};
 }
 % endfor
 
 ${self.get_size_prototype(packet, qualified=True)} {
-  return 0;
+  return ${self.class_name(packet.size_field.packet)}::${self.static_getter_name(packet.size_field)}(io_vector);
 }
 
 template<>

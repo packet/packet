@@ -170,7 +170,7 @@ class Packet(object):  # pylint: disable=R0903
     self.name = pkt.values[0]
     self.pom = pom
     self.children = []
-    self.length_field = None
+    self.size_field = None
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'

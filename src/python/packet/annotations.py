@@ -103,21 +103,21 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
       cond.append((field, param.value))
     return cond
 
-@field_level_annotation('length')  # pylint: disable=R0903
-class LengthAnnotation(FieldLevelAnnotation):
-  ''' The length annotation is used for the field storing the length of its
+@field_level_annotation('size')  # pylint: disable=R0903
+class SizeAnnotation(FieldLevelAnnotation):
+  ''' The size annotation is used for the field storing the size of its
       packet or another field. In the latter case, user need to pass the field
-      name as the parameter (e.g., @length(field)). We set length_field in the
+      name as the parameter (e.g., @size(field)). We set size_field in the
       respective packet/field.
-      Note: length cannot be overriden in the child classes. '''
+      Note: size cannot be overriden in the child classes. '''
   def __init__(self, field, model):
     FieldLevelAnnotation.__init__(self, field, model)
     assert len(model.params) <= 1, \
-        '@length can have at most one parameter: %s' % field.name
+        '@size can have at most one parameter: %s' % field.name
     if len(model.params) == 1:
       # TODO(soheil): We need to make sure that the field is a vector
       referencing_field = field.packet.find_field(model.params[0].name)
-      referencing_field.length_field = field
+      referencing_field.size_field = field
     else:
-      field.packet.length_field = field
+      field.packet.size_field = field
 
