@@ -60,7 +60,7 @@ ${self.offset_prototype(field, qualified=True)} {
 % endfor
 
 ${self.get_size_prototype(packet, qualified=True)} {
-  return 0;
+  return ${self.class_name(packet.size_field.packet)}::${self.static_getter_name(packet.size_field)}(io_vector);
 }
 
 template<>
