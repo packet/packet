@@ -52,6 +52,10 @@ ${self.static_setter_prototype(field, qualified=True)} {
 
 % for field in packet.fields:
 ${self.offset_prototype(field, qualified=True)} {
+  % if field.offset[1]:
+  Variable offset not supported yet!
+  % endif
+  return ${field.offset[0]};
 }
 % endfor
 

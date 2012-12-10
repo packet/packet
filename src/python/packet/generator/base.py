@@ -24,7 +24,7 @@ from abc import ABCMeta
 from abc import abstractmethod
 import logging
 
-from packet.generator.processor import LengthProcessor
+from packet.generator.processor import SizeProcessor
 from packet.generator.processor import OffsetProcessor
 from packet.parser.model import parse_file
 
@@ -37,7 +37,7 @@ class PacketGenerator(object):
       extend this class. '''
   __metaclass__ = ABCMeta
   def __init__(self):
-    self._pipeline = [OffsetProcessor(), LengthProcessor()]
+    self._pipeline = [OffsetProcessor(), SizeProcessor()]
 
   def _is_recursvie(self, opts):  # pylint: disable=R0201
     ''' Whether the option enforces recursive generation. '''
@@ -56,6 +56,9 @@ class PacketGenerator(object):
         LOG.error('No such file: ' + packet_file)
         return
 
+      for step in self._pipeline:
+        step.process(pom)
+
       LOG.info('Generating code from %s ...' % packet_file)
       self.generate_packet(pom, output_dir, opts)
 
@@ -66,8 +69,6 @@ class PacketGenerator(object):
   def _process_file(self, packet_file):  # pylint: disable=R0201
     ''' Process a file, and load all packets recursively.'''
     pom = parse_file(packet_file)
-    for step in self._pipeline:
-      step.process(pom)
     return pom
 
   @abstractmethod
