@@ -121,3 +121,13 @@ class SizeAnnotation(FieldLevelAnnotation):
     else:
       field.packet.size_field = field
 
+@field_level_annotation('repeated')  # pylint: disable=R0903
+class RepeatedAnnotation(FieldLevelAnnotation):
+  ''' The repeated annotation is used for annotate arrays. Each repeated field
+      must have another field annotated with size accordingly.'''
+  def __init__(self, field, model):
+    FieldLevelAnnotation.__init__(self, field, model)
+    assert len(model.params) == 0, \
+        'epeated does not accept parameters: %s' % field.name
+    field.repeated = True
+

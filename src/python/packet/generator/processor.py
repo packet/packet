@@ -80,9 +80,11 @@ class SizeProcessor(ModelProcessor):
       overriden in any derived packets. '''
   def process(self, model):
     for packet in model.packets.values():
-      self._set_size(packet)
+      self._set_size_in_packet(packet)
+      for field in packet.fields:
+        self._validate_repeated_field(field)
 
-  def _set_size(self, packet):  # pylint: disable=R0201
+  def _set_size_in_packet(self, packet):  # pylint: disable=R0201
     ''' Validates and sets size in all dervied packets. '''
     if not packet:
       return
@@ -96,6 +98,20 @@ class SizeProcessor(ModelProcessor):
     if not packet.size_field:
       assert packet.parent, 'Packet does not have any size field: %s' % \
                             packet.name
-      self._set_size(packet.parent)
+      self._set_size_in_packet(packet.parent)
       packet.size_field = packet.parent.size_field
+
+  def _validate_repeated_field(self, field):  # pylint: disable=R0201
+    ''' Validates repeated fields in a packet. '''
+    if not field:
+      return
+
+    if field.repeated and not field.size_field:
+      assert len(field.packet.children) == 0, \
+          'A packet with implicitly-sized arrays cannot be overriden: %s.%s' % \
+              (field.packet.name, field.name)
+      for other_field in field.packet.fields:
+        assert other_field == field or not other_field.repeated or \
+            other_field.field_size, \
+            'Found two implicitly size arrarys in %s' % field.packet.name
 

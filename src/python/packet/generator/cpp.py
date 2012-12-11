@@ -510,3 +510,4 @@ class CppGenerator(PacketGenerator):
     for field in packet.fields:
       self.__generate_getter_def(field, source_file)
       self.__generate_setter_def(field, source_file)
+

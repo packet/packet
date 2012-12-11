@@ -205,6 +205,7 @@ class Field(object):  # pylint: disable=R0903
     self.packet = pkt
     self.type = self._find_type('.'.join(field.field_type.values))
     self.offset = [0, ()]
+    self.repeated = False
 
     # TODO(soheil): Fix sequence here.
     self.annotations = {}
