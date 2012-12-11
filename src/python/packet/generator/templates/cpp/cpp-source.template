@@ -5,8 +5,17 @@
 <%block name="header">\
 ${parent.header()}
 
+${self.common_include()}\
+
 % for packet in pom.includes.values():
 ${self.include(packet.namespace)}
+% endfor
+% for packet in pom.packets.values():
+  % for child in packet.children:
+    % if child.pom.namespace != packet.pom.namespace:
+${self.include(child.pom.namespace)}
+    % endif
+  % endfor
 % endfor
 ${self.include(pom.namespace)}
 </%block>\
@@ -17,11 +26,12 @@ ${self.include(pom.namespace)}
   cpp_parent_class = self.get_parent(packet)
 %>\
 
-${cpp_class_name}::${cpp_class_name}(size_t packet_size) {
+${cpp_class_name}::${cpp_class_name}(size_t packet_size)
+    : ${cpp_parent_class}(packet_size) {
 }
 
-${cpp_class_name}::${cpp_class_name}(const IoVector& io_vector,
-    size_t packet_size) {
+${cpp_class_name}::${cpp_class_name}(const ::cyrus::io::IoVector& io_vector,
+    size_t packet_size) : ${cpp_parent_class}(io_vector, packet_size) {
 }
 
 ${cpp_class_name}::~${cpp_class_name}() {
@@ -36,17 +46,18 @@ ${self.getter_prototype(field, qualified=True)} {
 }
 
 ${self.static_getter_prototype(field, qualified=True)} {
-  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(vector);
-  return this->get_vector().read_data<${cpp_type_name}>(offset);
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  return io_vector.read_data<${cpp_type_name}>(offset);
 }
 
 ${self.setter_prototype(field, qualified=True)} {
-  return ${cpp_class_name}::${self.static_setter_name(field)}(vector);
+  ${cpp_class_name}::${self.static_setter_name(field)}(
+      ::std::move(${field.name}), vector);
 }
 
 ${self.static_setter_prototype(field, qualified=True)} {
-  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(vector);
-  this->get_vector().write_data<${cpp_type_name}>(${field.name}, offset);
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  io_vector.write_data<${cpp_type_name}>(${field.name}, offset);
 }
 % endfor
 
@@ -63,17 +74,34 @@ ${self.get_size_prototype(packet, qualified=True)} {
   return ${self.class_name(packet.size_field.packet)}::${self.static_getter_name(packet.size_field)}(io_vector);
 }
 
+% endfor
+
+<%block name="footer">
+namespace cyrus {
+namespace io {
+
+% for packet in reversed(pom.packets.values()):
+<%
+  cpp_class_name = self.class_name(packet, qualified=True)
+%>\
+
 template<>
-${cpp_class_name} make_packet<${cpp_class_name}>(const IoVector& io_vec, size_t packet_size) {
+::std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const ::cyrus::io::IoVector& io_vec,
+    size_t packet_size) {
   % for p in packet.children:
   if (${self.type_selector_cond(p)}) {
-    return make_packet<${self.class_name(p)}>(io_vec, packet_size);
+    return make_packet<${self.class_name(p, qualified=True)}>(io_vec, packet_size);
   }
   % endfor
-  return ${cpp_class_name}(io_vec, packet_size);
+  return ::std::make_shared<${cpp_class_name}>(io_vec, packet_size);
 }
 
 % endfor
+
+}  // namespace io
+}  // namespace cyrus
+</%block>
+
 
 <%def name="type_selector_cond(packet)" buffered="True" filter="trim">
   <%
@@ -82,7 +110,7 @@ ${cpp_class_name} make_packet<${cpp_class_name}>(const IoVector& io_vec, size_t 
   %>
   % if annot:
     % for field, value in annot.get_condition():
-     ${self.class_name(field.packet)}::${self.static_getter_name(field)}(io_vec) == ${value}
+     ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value}
     % endfor
   % endif
 </%def>
