@@ -34,9 +34,15 @@ ${self.body()}
 % endif
 </%def>
 
-<%def name="type_name(type, const=False, variant=TYPE_VARIANTS.NONE)"
-      buffered="True" filter="trim">
-  ${self.cpp_naming.get_cpptype_name(type, const, variant)}
+<%def name="type_name(type, const=False, variant=TYPE_VARIANTS.NONE,
+                      repeated=False)" buffered="True" filter="trim">
+  ${self.cpp_naming.get_cpptype_name(type, const, variant, repeated)}
+</%def>
+
+<%def name="field_type_name(field, const=False, variant=TYPE_VARIANTS.NONE)"
+    buffered="True" filter="trim">
+  ${self.cpp_naming.get_cpptype_name(field.type, const, variant,
+                                     field.repeated)}
 </%def>
 
 <%def name="get_parent(packet)" buffered="True" filter="trim">
@@ -68,7 +74,7 @@ ${self.body()}
       filter="trim">
   <%self:method_prototype qualified="${qualified}" const="True">
     <%def name="return_type()" filter="trim">
-      ${self.type_name(field.type)}
+      ${self.field_type_name(field)}
     </%def>
     <%def name="method_name()" filter="trim">
       get_${field.name}
@@ -88,7 +94,7 @@ ${self.body()}
       filter="trim">
   <%self:method_prototype qualified="${qualified}" static="True">
     <%def name="return_type()" filter="trim">
-      ${self.type_name(field.type)}
+      ${self.field_type_name(field)}
     </%def>
     <%def name="method_name()" filter="trim">
       ${self.static_getter_name(field)}
@@ -114,7 +120,7 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
+      ${self.field_type_name(field, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
     </%def>
   </%self:method_prototype>
 </%def>
@@ -135,7 +141,7 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
+      ${self.field_type_name(field, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>

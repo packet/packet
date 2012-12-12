@@ -26,7 +26,6 @@ import os.path
 from packet import types
 from packet.generator.base import PacketGenerator
 from packet.types import BuiltInType
-from packet.types import VariableLengthType
 from packet.utils.types import enum
 
 from mako.lookup import TemplateLookup
@@ -78,20 +77,22 @@ class CppTyping(object):
     self.__builtin_map[types.UNSIGNED_INT_32.name] = 'uint32_t'
     self.__builtin_map[types.UNSIGNED_INT_64.name] = 'uint64_t'
 
-  def get_cpp_type(self, packet_type, const=False, variant=TYPE_VARIANTS.NONE):
+  def get_cpp_type(self, packet_type, const=False, variant=TYPE_VARIANTS.NONE,
+                   repeated=False):
     ''' Returns cpp type name for any type. '''
 
     cpp_type = None
     builtin = isinstance(packet_type, BuiltInType)
     if builtin:
       cpp_type = self._get_builtin_type(packet_type)
-    elif isinstance(packet_type, VariableLengthType):
-      cpp_type = self._get_array(self.get_cpp_type(packet_type))
     else:
       cpp_type = _get_qualified_name(packet_type.pom.namespace,
                                      packet_type.name)
     if const:
       cpp_type = 'const ' + cpp_type
+
+    if repeated:
+      cpp_type = 'std::vector<std::shared_ptr<%s>>' % cpp_type
 
     # TODO(soheil): Maybe create an enum?
     if variant == TYPE_VARIANTS.POINTER:
@@ -130,9 +131,11 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     ''' Returns the field name. '''
     return name
 
-  def get_cpptype_name(self, thetype, const=False, variant=TYPE_VARIANTS.NONE):
+  def get_cpptype_name(self, thetype, const=False, variant=TYPE_VARIANTS.NONE,
+                       repeated=True):
     ''' Returns the C++ type. '''
-    return self.__typing_strategy.get_cpp_type(thetype, const, variant)
+    return self.__typing_strategy.get_cpp_type(thetype, const, variant,
+                                               repeated)
 
   def get_enum_start(self, enum_name):
     ''' Returns the line for enum opening. '''
@@ -158,8 +161,8 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     ''' Returns the start line of class definition. '''
     if parent_class:
       definition = '%s %s : public %s ' % (self.__DEF_TEXTS.CLASS,
-                                          self.get_class_name(class_name),
-                                          self.get_class_name(parent_class))
+                                           self.get_class_name(class_name),
+                                           self.get_class_name(parent_class))
     else:
       definition = '%s %s ' % (self.__DEF_TEXTS.CLASS,
                               self.get_class_name(class_name))

@@ -39,7 +39,7 @@ ${cpp_class_name}::~${cpp_class_name}() {
 
 % for field in packet.fields:
 <%
-  cpp_type_name = self.cpp_naming.get_cpptype_name(field.type)
+  cpp_type_name = self.field_type_name(field)
 %>\
 ${self.getter_prototype(field, qualified=True)} {
   return ${cpp_class_name}::${self.static_getter_name(field)}(vector);
@@ -47,7 +47,17 @@ ${self.getter_prototype(field, qualified=True)} {
 
 ${self.static_getter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  % if field.repeated:
+  auto size = ${cpp_class_name}::get_size(io_vector);
+    % if field.size_field:
+  auto count = ${cpp_class_name}::${self.static_getter_name(field.size_field)}(io_vector);
+    % else:
+  auto count = 0;
+    % endif
+  return io_vector.read_repeated_data<${self.type_name(field.type)}>(offset, count, size);
+  % else:
   return io_vector.read_data<${cpp_type_name}>(offset);
+  % endif
 }
 
 ${self.setter_prototype(field, qualified=True)} {

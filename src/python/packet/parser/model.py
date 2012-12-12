@@ -188,6 +188,10 @@ class Packet(object):  # pylint: disable=R0903
     for field in pkt.field_list:
       self.fields.append(Field(self, field))
 
+    for field in pkt.field_list:
+      self.find_field(field.values[0]).process_annotations(
+          field.annotation_list)
+
   def find_field(self, name):
     ''' Find the field matching the field name. '''
     for field in self.fields:
@@ -206,10 +210,13 @@ class Field(object):  # pylint: disable=R0903
     self.type = self._find_type('.'.join(field.field_type.values))
     self.offset = [0, ()]
     self.repeated = False
-
-    # TODO(soheil): Fix sequence here.
+    self.size_field = None
     self.annotations = {}
-    for annotation in field.annotation_list:
+
+  def process_annotations(self, annotation_list):
+    ''' A post-processing unit that process the annotation list. '''
+    # TODO(soheil): Fix sequence here.
+    for annotation in annotation_list:
       annot_obj = Annotation(annotation)
       self.annotations[annot_obj.name] = \
           create_field_level_annotation(self, annot_obj)

@@ -67,7 +67,6 @@ class OffsetProcessor(ModelProcessor):
         fields. For example, an offset of (2, [x, y]) means: 2 + x.len + y.len
         bytes. '''
     offset_constant, intermediate_fields = self._calculate_offset(packet.parent)
-    print packet.name, packet.parent, offset_constant, intermediate_fields
     for field in packet.fields:
       field.offset = (offset_constant, list(intermediate_fields))
       if isinstance(field.type, BuiltInType):
@@ -81,8 +80,10 @@ class SizeProcessor(ModelProcessor):
   def process(self, model):
     for packet in model.packets.values():
       self._set_size_in_packet(packet)
+      i = 0
       for field in packet.fields:
-        self._validate_repeated_field(field)
+        i += 1
+        self._validate_repeated_field(field, i == len(packet.fields))
 
   def _set_size_in_packet(self, packet):  # pylint: disable=R0201
     ''' Validates and sets size in all dervied packets. '''
@@ -101,7 +102,7 @@ class SizeProcessor(ModelProcessor):
       self._set_size_in_packet(packet.parent)
       packet.size_field = packet.parent.size_field
 
-  def _validate_repeated_field(self, field):  # pylint: disable=R0201
+  def _validate_repeated_field(self, field, is_last):  # pylint: disable=R0201
     ''' Validates repeated fields in a packet. '''
     if not field:
       return
@@ -110,6 +111,10 @@ class SizeProcessor(ModelProcessor):
       assert len(field.packet.children) == 0, \
           'A packet with implicitly-sized arrays cannot be overriden: %s.%s' % \
               (field.packet.name, field.name)
+      assert is_last, \
+          'Implicitly-sized arrays can only come as the last element of a' \
+          'packet: %s.%s' % (field.packet.name, field.name)
+
       for other_field in field.packet.fields:
         assert other_field == field or not other_field.repeated or \
             other_field.field_size, \
