@@ -78,7 +78,7 @@ class CppTyping(object):
     self.__builtin_map[types.UNSIGNED_INT_64.name] = 'uint64_t'
 
   def get_cpp_type(self, packet_type, const=False, variant=TYPE_VARIANTS.NONE,
-                   repeated=False):
+                   repeated=False):  # pylint: disable=W0613
     ''' Returns cpp type name for any type. '''
 
     cpp_type = None

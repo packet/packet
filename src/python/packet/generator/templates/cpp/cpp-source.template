@@ -26,13 +26,8 @@ ${self.include(pom.namespace)}
   cpp_parent_class = self.get_parent(packet)
 %>\
 
-${cpp_class_name}::${cpp_class_name}(size_t packet_size)
-    : ${cpp_parent_class}(packet_size) {
-}
-
-${cpp_class_name}::${cpp_class_name}(const ::cyrus::io::IoVector& io_vector,
-    size_t packet_size) : ${cpp_parent_class}(io_vector, packet_size) {
-}
+${cpp_class_name}::${self.constructor_prototype(packet)}
+    : ${cpp_parent_class}(io_vector) {}
 
 ${cpp_class_name}::~${cpp_class_name}() {
 }
@@ -48,7 +43,7 @@ ${self.getter_prototype(field, qualified=True)} {
 ${self.static_getter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
   % if field.repeated:
-  auto size = ${cpp_class_name}::get_size(io_vector);
+  auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
     % if field.size_field:
   auto count = ${cpp_class_name}::${self.static_getter_name(field.size_field)}(io_vector);
     % else:
@@ -67,7 +62,13 @@ ${self.setter_prototype(field, qualified=True)} {
 
 ${self.static_setter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  % if field.repeated:
+  offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
+  io_vector.expand(${field.name}.${self.size_method_name(field.packet)}(), ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector));
+  io_vector.write_data<${self.type_name(field.type)}>(${field.name}, offset);
+  % else:
   io_vector.write_data<${cpp_type_name}>(${field.name}, offset);
+  % endif
 }
 % endfor
 
@@ -78,9 +79,20 @@ ${self.offset_prototype(field, qualified=True)} {
   % endif
   return ${field.offset[0]};
 }
+  % if field.repeated:
+${self.field_size_prototype(field, qualified=True)} {
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
+  return size - offset;
+}
+  % endif
 % endfor
 
-${self.get_size_prototype(packet, qualified=True)} {
+${self.size_prototype(packet, qualified=True)} {
+  return ${cpp_class_name}::${self.static_size_method_name(packet)}(vector);
+}
+
+${self.static_size_prototype(packet, qualified=True)} {
   return ${self.class_name(packet.size_field.packet)}::${self.static_getter_name(packet.size_field)}(io_vector);
 }
 
@@ -96,14 +108,13 @@ namespace io {
 %>\
 
 template<>
-::std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const ::cyrus::io::IoVector& io_vec,
-    size_t packet_size) {
+::std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const ::cyrus::io::IoVector& io_vec) {
   % for p in packet.children:
   if (${self.type_selector_cond(p)}) {
-    return make_packet<${self.class_name(p, qualified=True)}>(io_vec, packet_size);
+    return make_packet<${self.class_name(p, qualified=True)}>(io_vec);
   }
   % endfor
-  return ::std::make_shared<${cpp_class_name}>(io_vec, packet_size);
+  return ::std::make_shared<${cpp_class_name}>(io_vec);
 }
 
 % endfor

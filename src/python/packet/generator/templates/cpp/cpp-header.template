@@ -26,8 +26,7 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   % endfor
   };
 
-  explicit ${cpp_class_name}(size_t packet_size);
-  ${cpp_class_name}(const ::cyrus::io::IoVector& io_vector, size_t packet_size);
+  ${self.constructor_prototype(packet)};
   virtual ~${cpp_class_name}();
 
 % for field in packet.fields:
@@ -35,7 +34,8 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   ${self.setter_decl(field)}
 % endfor
 
-  ${self.get_size_decl(packet)}
+  ${self.size_decl(packet)}
+  ${self.static_size_decl(packet)}
 
 % for field in packet.fields:
   ${self.static_getter_decl(field)}
@@ -45,37 +45,48 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
  protected:
 % for field in packet.fields:
   ${self.offset_decl(field)}
+  % if field.repeated:
+  ${self.field_size_decl(field)}
+  % endif
 % endfor
 };
 
 % endfor
 \
 <%def name="getter_decl(field)" buffered="True" filter="trim">
-${self.getter_prototype(field)};
+  ${self.getter_prototype(field)};
 </%def>\
 \
 <%def name="static_getter_decl(field)" buffered="True" filter="trim">
-${self.static_getter_prototype(field)};
+  ${self.static_getter_prototype(field)};
 </%def>\
 \
 <%def name="setter_decl(field)" buffered="True" filter="trim">
-${self.setter_prototype(field)};
+  ${self.setter_prototype(field)};
 </%def>\
 \
 <%def name="static_setter_decl(field)" buffered="True" filter="trim">
-${self.static_setter_prototype(field)};
+  ${self.static_setter_prototype(field)};
 </%def>\
 \
 <%def name="offset_decl(field)" buffered="True" filter="trim">
-${self.offset_prototype(field)};
+  ${self.offset_prototype(field)};
 </%def>\
 \
-<%def name="get_size_decl(packet)" buffered="True" filter="trim">
-${self.get_size_prototype(packet)};
+<%def name="field_size_decl(packet)" buffered="True" filter="trim">
+  ${self.field_size_prototype(packet)};
 </%def>\
-
+\
+<%def name="size_decl(packet)" buffered="True" filter="trim">
+  virtual ${self.size_prototype(packet)};
+</%def>\
+\
+<%def name="static_size_decl(packet)" buffered="True" filter="trim">
+  ${self.static_size_prototype(packet)};
+</%def>\
+\
 <%def name="header_macro()" buffered="True" filter="trim">
-${'PACKET_GEN_%s_' % pom.namespace.upper()}
+  ${'PACKET_GEN_%s_' % pom.namespace.upper()}
 </%def>
 
 <%block name="footer">
