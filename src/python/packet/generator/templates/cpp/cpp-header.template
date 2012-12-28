@@ -26,8 +26,11 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   % endfor
   };
 
-  ${self.constructor_prototype(packet)};
+  ${self.iovector_constructor_prototype(packet)};
+  ${self.size_constructor_prototype(packet)};
   virtual ~${cpp_class_name}();
+
+  ${self.init_method_decl(packet)}
 
 % for field in packet.fields:
   ${self.getter_decl(field)}
@@ -49,6 +52,9 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   ${self.field_size_decl(field)}
   % endif
 % endfor
+
+ private:
+  const static size_t MIN_SIZE = ${packet.min_size};
 };
 
 % endfor
@@ -87,7 +93,11 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 \
 <%def name="header_macro()" buffered="True" filter="trim">
   ${'PACKET_GEN_%s_' % pom.namespace.upper()}
-</%def>
+</%def>\
+\
+<%def name="init_method_decl(packet)" buffered="True" filter="trim">
+  ${self.init_method_prototype(packet)};
+</%def>\
 
 <%block name="footer">
 #endif  // ${self.header_macro()}

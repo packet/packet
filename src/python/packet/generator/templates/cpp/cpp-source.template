@@ -26,10 +26,18 @@ ${self.include(pom.namespace)}
   cpp_parent_class = self.get_parent(packet)
 %>\
 
-${cpp_class_name}::${self.constructor_prototype(packet)}
+${cpp_class_name}::${self.iovector_constructor_prototype(packet)}
     : ${cpp_parent_class}(io_vector) {}
 
-${cpp_class_name}::~${cpp_class_name}() {
+${cpp_class_name}::${self.size_constructor_prototype(packet)}
+    : ${cpp_class_name}(cyrus::io::IoVector(size)) {
+  ${self.init_method_name(packet)}();
+}
+
+${cpp_class_name}::~${cpp_class_name}() {}
+
+${self.init_method_prototype(packet, qualified=True)} {
+  ${cpp_class_name}::${self.setter_name(packet.size_field)}(MIN_SIZE);
 }
 
 % for field in packet.fields:
@@ -64,8 +72,19 @@ ${self.static_setter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
   % if field.repeated:
   offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
-  io_vector.expand(${field.name}.${self.size_method_name(field.packet)}(), ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector));
+  auto element_size = ${field.name}.${self.size_method_name(field.packet)}();
+  auto packet_size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
+  io_vector.expand(element_size, packet_size);
   io_vector.write_data<${self.type_name(field.type)}>(${field.name}, offset);
+  ${self.class_name(packet.size_field.packet)}::${
+      self.static_setter_name(packet.size_field)}(packet_size + element_size,
+      io_vector);
+    % if field.size_field:
+  auto count = ${self.class_name(field.size_field.packet)}::${
+      self.static_getter_name(field.size_field)}(io_vector);
+  ${self.class_name(field.size_field.packet)}::${
+      self.static_setter_name(field.size_field)}(count + 1, io_vector);
+    % endif
   % else:
   io_vector.write_data<${cpp_type_name}>(${field.name}, offset);
   % endif
@@ -79,11 +98,19 @@ ${self.offset_prototype(field, qualified=True)} {
   % endif
   return ${field.offset[0]};
 }
+
   % if field.repeated:
 ${self.field_size_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
   auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
+    % if field.size_field:
+  auto count = ${cpp_class_name}::${self.static_getter_name(field.size_field)}(io_vector);
+  return io_vector.get_repeated_data_size<${self.type_name(field.type)}>(
+      offset, count, size);
+    % else:
+      ## This is an optimization for implicitly sized repeated fields.
   return size - offset;
+    % endif
 }
   % endif
 % endfor

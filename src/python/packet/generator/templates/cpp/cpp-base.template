@@ -65,8 +65,12 @@ ${self.body()}
 #include "${include_prefix + namespace}.h"\
 </%def>
 
-<%def name="constructor_prototype(packet)" buffered="True" filter="trim">
+<%def name="iovector_constructor_prototype(packet)" buffered="True" filter="trim">
   ${self.class_name(packet)}(const cyrus::io::IoVector& io_vector)
+</%def>
+
+<%def name="size_constructor_prototype(packet)" buffered="True" filter="trim">
+  ${self.class_name(packet)}(size_t size)
 </%def>
 
 <%def name="method_prototype(const=False, qualified=False, static=False)"
@@ -112,17 +116,21 @@ ${self.body()}
   </%self:method_prototype>
 </%def>
 
+<%def name="setter_name(field)" buffered="True" filter="trim">
+  % if field.repeated:
+  add_${field.name}
+  % else:
+  set_${field.name}
+  % endif
+</%def>
+
 <%def name="setter_prototype(field, qualified=False)" buffered="True" filter="trim">
   <%self:method_prototype qualified="${qualified}">
     <%def name="return_type()" filter="trim">
       void
     </%def>
     <%def name="method_name()" filter="trim">
-      % if field.repeated:
-      add_${field.name}
-      % else:
-      set_${field.name}
-      % endif
+      ${self.setter_name(field)}
     </%def>
     <%def name="class_name()" filter="trim">
       ${self.class_name(field.packet)}
@@ -241,6 +249,27 @@ ${self.body()}
     </%def>
     <%def name="args()" filter="trim">
       const cyrus::io::IoVector& io_vector
+    </%def>
+  </%self:method_prototype>
+</%def>
+
+<%def name="init_method_name(packet)" buffered="True" filter="trim">
+  init
+</%def>
+
+<%def name="init_method_prototype(packet, qualified=False)" buffered="True"
+      filter="trim">
+  <%self:method_prototype qualified="${qualified}">
+    <%def name="return_type()" filter="trim">
+      void
+    </%def>
+    <%def name="method_name()" filter="trim">
+      ${self.init_method_name(packet)}
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(packet)}
+    </%def>
+    <%def name="args()" filter="trim">
     </%def>
   </%self:method_prototype>
 </%def>

@@ -79,13 +79,32 @@ class SizeProcessor(ModelProcessor):
       overriden in any derived packets. '''
   def process(self, model):
     for packet in model.packets.values():
-      self._set_size_in_packet(packet)
-      i = 0
-      for field in packet.fields:
-        i += 1
-        self._validate_repeated_field(field, i == len(packet.fields))
+      self._set_packet_minimum_size(packet)
+      self._set_size_field_in_packet(packet)
+      self._set_size_field_in_fields(packet)
 
-  def _set_size_in_packet(self, packet):  # pylint: disable=R0201
+  def _set_packet_minimum_size(self, packet):
+    ''' Finds the minimum size of a packet. '''
+    packet.min_size = self._get_packet_minimum_size(packet)
+
+  def _get_packet_minimum_size(self, packet):
+    ''' Returns the minimum size of the packet. '''
+    if not packet:
+      return 0
+
+    min_size = self._get_packet_minimum_size(packet.parent)
+    for field in packet.fields:
+      if field.repeated:
+        continue
+
+      if isinstance(field.type, BuiltInType):
+        min_size += field.type.length_in_bytes
+      else:
+        min_size += self._get_packet_minimum_size(field.type)
+
+    return min_size
+
+  def _set_size_field_in_packet(self, packet):  # pylint: disable=R0201
     ''' Validates and sets size in all dervied packets. '''
     if not packet:
       return
@@ -99,8 +118,15 @@ class SizeProcessor(ModelProcessor):
     if not packet.size_field:
       assert packet.parent, 'Packet does not have any size field: %s' % \
                             packet.name
-      self._set_size_in_packet(packet.parent)
+      self._set_size_field_in_packet(packet.parent)
       packet.size_field = packet.parent.size_field
+
+  def _set_size_field_in_fields(self, packet):
+    ''' Sets size_field for fields. '''
+    i = 0
+    for field in packet.fields:
+      i += 1
+      self._validate_repeated_field(field, i == len(packet.fields))
 
   def _validate_repeated_field(self, field, is_last):  # pylint: disable=R0201
     ''' Validates repeated fields in a packet. '''
