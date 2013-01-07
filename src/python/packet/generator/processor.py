@@ -67,7 +67,6 @@ class OffsetProcessor(ModelProcessor):
         fields. For example, an offset of (2, [x, y]) means: 2 + x.len + y.len
         bytes. '''
     offset_constant, intermediate_fields = self._calculate_offset(packet.parent)
-    print packet.name, packet.parent, offset_constant, intermediate_fields
     for field in packet.fields:
       field.offset = (offset_constant, list(intermediate_fields))
       if isinstance(field.type, BuiltInType):
@@ -80,9 +79,32 @@ class SizeProcessor(ModelProcessor):
       overriden in any derived packets. '''
   def process(self, model):
     for packet in model.packets.values():
-      self._set_size(packet)
+      self._set_packet_minimum_size(packet)
+      self._set_size_field_in_packet(packet)
+      self._set_size_field_in_fields(packet)
 
-  def _set_size(self, packet):  # pylint: disable=R0201
+  def _set_packet_minimum_size(self, packet):
+    ''' Finds the minimum size of a packet. '''
+    packet.min_size = self._get_packet_minimum_size(packet)
+
+  def _get_packet_minimum_size(self, packet):
+    ''' Returns the minimum size of the packet. '''
+    if not packet:
+      return 0
+
+    min_size = self._get_packet_minimum_size(packet.parent)
+    for field in packet.fields:
+      if field.repeated:
+        continue
+
+      if isinstance(field.type, BuiltInType):
+        min_size += field.type.length_in_bytes
+      else:
+        min_size += self._get_packet_minimum_size(field.type)
+
+    return min_size
+
+  def _set_size_field_in_packet(self, packet):  # pylint: disable=R0201
     ''' Validates and sets size in all dervied packets. '''
     if not packet:
       return
@@ -96,6 +118,31 @@ class SizeProcessor(ModelProcessor):
     if not packet.size_field:
       assert packet.parent, 'Packet does not have any size field: %s' % \
                             packet.name
-      self._set_size(packet.parent)
+      self._set_size_field_in_packet(packet.parent)
       packet.size_field = packet.parent.size_field
+
+  def _set_size_field_in_fields(self, packet):
+    ''' Sets size_field for fields. '''
+    i = 0
+    for field in packet.fields:
+      i += 1
+      self._validate_repeated_field(field, i == len(packet.fields))
+
+  def _validate_repeated_field(self, field, is_last):  # pylint: disable=R0201
+    ''' Validates repeated fields in a packet. '''
+    if not field:
+      return
+
+    if field.repeated and not field.size_field:
+      assert len(field.packet.children) == 0, \
+          'A packet with implicitly-sized arrays cannot be overriden: %s.%s' % \
+              (field.packet.name, field.name)
+      assert is_last, \
+          'Implicitly-sized arrays can only come as the last element of a' \
+          'packet: %s.%s' % (field.packet.name, field.name)
+
+      for other_field in field.packet.fields:
+        assert other_field == field or not other_field.repeated or \
+            other_field.field_size, \
+            'Found two implicitly size arrarys in %s' % field.packet.name
 

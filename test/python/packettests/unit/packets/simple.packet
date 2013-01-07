@@ -11,3 +11,10 @@ packet SimpleParent {
 packet AnotherSimple(SimpleParent) {
   Simple y;
 }
+
+@type_selector(c=3)
+packet YetAnotherSimple(SimpleParent) {
+  @size(simples) int8 s;
+  @repeated Simple simples;
+}
+
