@@ -27,6 +27,8 @@ options {
 tokens {
   ANNOTATION;
   ANNOTATION_PARAM;
+  ENUM;
+  ENUM_ITEM;
   EXTENDS;
   FIELD;
   FIELD_TYPE;
@@ -98,9 +100,22 @@ file: package* expr+ -> ^(FILE package* expr+);
 
 package: 'package' name literal SEMICOLON -> ^(PACKAGE name literal);
 
-expr: include | packet;
+expr: include | enum | packet;
 
 include: 'include' path SEMICOLON -> ^(INCLUDE path);
+
+enum: enum_def LBRAC enum_body RBRAC -> ^(ENUM enum_def enum_body?);
+
+enum_def: 'enum' enum_name -> enum_name;
+
+enum_body: (enum_item SEMICOLON!)*;
+
+enum_item: enum_item_name EQ enum_item_value ->
+    ^(ENUM_ITEM enum_item_name enum_item_value);
+
+enum_item_name: IDENTIFIER;
+
+enum_item_value: NUMBER;
 
 packet: packet_def LBRAC packet_body RBRAC -> ^(PACKET packet_def packet_body?);
 
@@ -125,6 +140,8 @@ annotation_params: LEFT_PRANTHESIS annotation_param ( COMMA annotation_param)*
 
 annotation_param: IDENTIFIER (EQ value)? ->
     ^(ANNOTATION_PARAM IDENTIFIER value?);
+
+enum_name: IDENTIFIER;
 
 packet_name: IDENTIFIER;
 
