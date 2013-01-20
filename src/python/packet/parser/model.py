@@ -151,22 +151,34 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       self.includes[included_pom.namespace] = included_pom
 
   def find_packet(self, name):
-    ''' finds a packet.
+    ''' Finds a packet in the object model.
         @param name: qualified packet name. '''
+    the_type = self.find_type(name)
+    return the_type if isinstance(the_type, Packet) else None
+
+  def find_enum(self, name):
+    ''' Finds an enum in the object model.
+        @param name: qualified enum name. '''
+    the_type = self.find_type(name)
+    return the_type if isinstance(the_type, Enum) else None
+
+  def find_type(self, name):
+    ''' Finds a type.
+        @param name: qualified type name. '''
     if not name:
       return None
 
     if name.find('.') == -1:
-      return self.packets.get(name)
+      return self.packets.get(name) or self.enums.get(name)
     else:
       # TODO(soheil): Just one level of namespaces?
       namespace = name.split('.')[0]
-      pkt = name.split('.')[-1]
+      type_name = name.split('.')[-1]
       if namespace == self.namespace:
-        return self.packets.get(pkt)
+        return self.packets.get(type_name) or self.enums.get(type_name)
 
       namespace_pom = self.includes.get(namespace)
-      return namespace_pom.find_packet(pkt) if namespace_pom else None
+      return namespace_pom.find_packet(type_name) if namespace_pom else None
 
 class Enum(object):  # pylint: disable=R0903
   ''' Represents an enum. '''
@@ -208,7 +220,7 @@ class Packet(object):  # pylint: disable=R0903
 
     self.annotations = {}
     for annotation in pkt.annotation_list:
-      annot_obj = Annotation(annotation)
+      annot_obj = Annotation(annotation, self)
       self.annotations[annot_obj.name] = \
           create_packet_level_annotation(self, annot_obj)
 
@@ -245,7 +257,7 @@ class Field(object):  # pylint: disable=R0903
     ''' A post-processing unit that process the annotation list. '''
     # TODO(soheil): Fix sequence here.
     for annotation in annotation_list:
-      annot_obj = Annotation(annotation)
+      annot_obj = Annotation(annotation, self.packet)
       self.annotations[annot_obj.name] = \
           create_field_level_annotation(self, annot_obj)
 
@@ -263,29 +275,42 @@ class Field(object):  # pylint: disable=R0903
 
 class Annotation(object):  # pylint: disable=R0903
   ''' Represents an annotation. '''
-  def __init__(self, annotation):
-    ''' @param annotation: is the parsed annotation structure. '''
+  def __init__(self, annotation, pkt):
+    ''' @param annotation: is the parsed annotation structure.
+        @param pkt: Annotation's packet (it can annotate a field of this packet
+                    or on the packet itself).'''
     self.name = annotation.values[0]
+    self.packet = pkt
     self.params = []
     for param in annotation.annotation_param_list:
       self.params.append(AnnotationParam(self, param.values[0],
-                                         param.values[1]
-                                             if len(param.values) == 2
-                                             else None))
+                                         param.values[1:]))
 
 class AnnotationParam(object):  # pylint: disable=R0903
   ''' Represents and annotation param. '''
   def __init__(self, annotation, name, value):
     self.annotation = annotation
     self.name = name
-    if value == None:
+    if len(value) == 0:
       self.value = None
-    elif value.startswith('"') or value.startswith('\''):
-      self.value = value[1:-1]
-    elif value.startswith('0x'):
-      self.value = int(value, 16)
-    elif value.find('.') != -1:
-      self.value = float(value)
+    elif len(value) > 1:
+      item = self.__find_enum_item('.'.join(value[-3:-2]), value[-1])
+      self.value = item.value if item else None
+    elif value[0].startswith('"') or value[0].startswith('\''):
+      self.value = value[0][1:-1]
+    elif value[0].startswith('0x'):
+      self.value = int(value[0], 16)
+    elif value[0].find('.') != -1:
+      self.value = float(value[0])
     else:
-      self.value = int(value)
+      self.value = int(value[0])
+
+  def __find_enum_item(self, enum_name, item_name):
+    ''' Finds an enum item.
+        @param enum_name: Enumeration qualified name.
+        @param item_name: Enumeration item name. '''
+    enum = self.annotation.packet.pom.find_enum(enum_name)
+    if not enum:
+      return None
+    return enum.items.get(item_name)
 

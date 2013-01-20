@@ -154,7 +154,7 @@ name: IDENTIFIER;
 
 annotation_value: literal | NUMBER | enumeration_reference;
 
-enumeration_reference: (IDENTIFIER DOT)? IDENTIFIER DOT IDENTIFIER;
+enumeration_reference: (IDENTIFIER DOT!)? IDENTIFIER DOT! IDENTIFIER;
 
 literal: LITERAL;
 
