@@ -6,7 +6,7 @@ enum TestEnum {
   ITEM2 = 0x1;
 }
 
-@type_selector(c=2)
+@type_selector(c=TestEnum.ITEM1)
 packet Including(simple.SimpleParent) {
   @repeated simple.Simple s;  # Some comments.
 }

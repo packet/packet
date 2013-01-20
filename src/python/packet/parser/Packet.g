@@ -138,8 +138,8 @@ annotation: AT IDENTIFIER annotation_params? ->
 annotation_params: LEFT_PRANTHESIS annotation_param ( COMMA annotation_param)*
     RIGHT_PRANTHESIS;
 
-annotation_param: IDENTIFIER (EQ value)? ->
-    ^(ANNOTATION_PARAM IDENTIFIER value?);
+annotation_param: IDENTIFIER (EQ annotation_value)? ->
+    ^(ANNOTATION_PARAM IDENTIFIER annotation_value?);
 
 enum_name: IDENTIFIER;
 
@@ -152,7 +152,9 @@ field_type: ( IDENTIFIER DOT )? IDENTIFIER ->
 
 name: IDENTIFIER;
 
-value: literal | NUMBER;
+annotation_value: literal | NUMBER | enumeration_reference;
+
+enumeration_reference: (IDENTIFIER DOT)? IDENTIFIER DOT IDENTIFIER;
 
 literal: LITERAL;
 
