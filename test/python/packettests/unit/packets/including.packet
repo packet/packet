@@ -1,6 +1,11 @@
 # Copyright (c) 2013, The Packet Project.
 include <simple.packet>;
 
+enum TestEnum {
+  ITEM1 = 2;
+  ITEM2 = 0x1;
+}
+
 @type_selector(c=2)
 packet Including(simple.SimpleParent) {
   @repeated simple.Simple s;  # Some comments.

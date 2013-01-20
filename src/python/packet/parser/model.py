@@ -114,8 +114,10 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     self.namespace = namespace
     self.package_dict = self.__get_package_dict(self._tree)
     self.includes = OrderedDict()
+    self.enums = OrderedDict()
     self.packets = OrderedDict()
     self.__load_includes(self._tree)
+    self.__load_enums(self._tree)
     self.__load_packets(self._tree)
 
   def __get_package_dict(self, tree):  # pylint: disable=R0201
@@ -126,6 +128,12 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       value = package.values[1][1:-1]
       package_dict[lang] = value
     return package_dict
+
+  def __load_enums(self, tree):
+    ''' Loads enums from the tree. '''
+    for enum in tree.enum_list:
+      enum_obj = Enum(self, enum)
+      self.enums[enum_obj.name] = enum_obj
 
   def __load_packets(self, tree):
     ''' Loads the packets from the tree. '''
@@ -160,13 +168,33 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       namespace_pom = self.includes.get(namespace)
       return namespace_pom.find_packet(pkt) if namespace_pom else None
 
+class Enum(object):  # pylint: disable=R0903
+  ''' Represents an enum. '''
+  def __init__(self, pom, enum):
+    ''' @param pom: pkt's object model.
+        @param enum: is the parsed enum structure. '''
+    self.name = enum.values[0]
+    self.pom = pom
+    self.items = OrderedDict()
+    for item in enum.enum_item_list:
+      item_obj = EnumItem(self, item)
+      self.items[item_obj.name] = item_obj
+
+class EnumItem(object):  # pylint: disable=R0903
+  ''' Represents an enum item. '''
+  def __init__(self, enum, enum_item):
+    ''' @param enum: The container enum.
+        @param enum_item: The parsed enum item structure. '''
+    self.name = enum_item.values[0]
+    self.value = enum_item.values[1]
+    self.enum = enum
+
 # TODO(soheil): Maybe extend as Type.
 class Packet(object):  # pylint: disable=R0903
   ''' Represent a packet. '''
   def __init__(self, pom, pkt):
     ''' @param pom: pkt's object model.
-        @param pkt: is the parsed packet structure.
-        '''
+        @param pkt: is the parsed packet structure. '''
     self.name = pkt.values[0]
     self.pom = pom
     self.children = []
