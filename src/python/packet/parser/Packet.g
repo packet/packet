@@ -94,57 +94,37 @@ BaseRecognizer.displayRecognitionError = displayRecognitionError
 /*
  * Parser rules.
  */
-file:
-  package* expr+ -> ^(FILE package* expr+);
+file: package* expr+ -> ^(FILE package* expr+);
 
-package:
-  'package' name literal SEMICOLON -> ^(PACKAGE name literal);
+package: 'package' name literal SEMICOLON -> ^(PACKAGE name literal);
 
-expr:
-  include
-  | packet;
+expr: include | packet;
 
-include:
-  'include' path SEMICOLON -> ^(INCLUDE path)
-  ;
+include: 'include' path SEMICOLON -> ^(INCLUDE path);
 
-packet:
-  packet_def LBRAC packet_body RBRAC -> ^(PACKET packet_def packet_body)
-  ;
+packet: packet_def LBRAC packet_body RBRAC -> ^(PACKET packet_def packet_body?);
 
-packet_def:
-  annotation* 'packet' packet_name parent_packet? ->
-      packet_name annotation* parent_packet?
-  ;
+packet_def: annotation* 'packet' packet_name parent_packet? ->
+    packet_name annotation* parent_packet?;
 
-parent_packet:
-  LEFT_PRANTHESIS parent_packet_name RIGHT_PRANTHESIS ->
-      ^(EXTENDS parent_packet_name)
-  ;
+parent_packet: LEFT_PRANTHESIS parent_packet_name RIGHT_PRANTHESIS ->
+    ^(EXTENDS parent_packet_name);
 
-parent_packet_name:
-  ( packet_name DOT )? packet_name
-  | 'object';
+parent_packet_name: ( packet_name DOT )? packet_name | 'object';
 
-packet_body:
-   (field SEMICOLON!)*
-   ;
+packet_body: (field SEMICOLON!)*;
 
-field:
-  annotation* field_type field_name ->
-      ^(FIELD field_name annotation* field_type)
-  ;
+field: annotation* field_type field_name ->
+    ^(FIELD field_name annotation* field_type);
 
-annotation:
-  AT IDENTIFIER annotation_params? -> ^(ANNOTATION IDENTIFIER annotation_params?)
-  ;
+annotation: AT IDENTIFIER annotation_params? ->
+    ^(ANNOTATION IDENTIFIER annotation_params?);
 
-annotation_params:
-  LEFT_PRANTHESIS annotation_param ( COMMA annotation_param)* RIGHT_PRANTHESIS;
+annotation_params: LEFT_PRANTHESIS annotation_param ( COMMA annotation_param)*
+    RIGHT_PRANTHESIS;
 
-annotation_param:
-  IDENTIFIER (EQ value)? -> ^(ANNOTATION_PARAM IDENTIFIER value?)
-  ;
+annotation_param: IDENTIFIER (EQ value)? ->
+    ^(ANNOTATION_PARAM IDENTIFIER value?);
 
 packet_name: IDENTIFIER;
 
@@ -191,6 +171,8 @@ SLASH: '/';
 
 WHITESPACE: ( '\t' | ' ' | '\u000C' | '\n' | '\r' )+ { $channel = HIDDEN; };
 
+COMMENT: '#' ~('\r' | '\n')* { $channel = HIDDEN; };
+
 UNDERSCORE: '_';
 
 LT: '<';
@@ -199,36 +181,24 @@ GT: '>';
 
 EQ: '=';
 
-NUMBER:
-  ( DASH? ( DIGIT+ (DOT DIGIT+)? ) ) | ( '0x' ( DIGIT | 'A'..'F' | 'a'..'f' )+ )
-  ;
+NUMBER: ( DASH? ( DIGIT+ (DOT DIGIT+)? ) ) |
+    ( '0x' ( DIGIT | 'A'..'F' | 'a'..'f' )+ );
 
 LITERAL: QOUTATION LITERAL_PART+ QOUTATION;
 
-fragment LITERAL_PART:
-  ~( QOUTATION )
-  ;
-  
-fragment QOUTATION:
-  '"' | '\''
-  ;
+fragment LITERAL_PART: ~( QOUTATION );
+
+fragment QOUTATION: '"' | '\'';
 
 PATH: LT PATH_PART+ GT;
 
-fragment PATH_PART:
-  ~( LT | GT )
-  ;
+fragment PATH_PART: ~( LT | GT );
 
-IDENTIFIER:
-  IDENTIFIER_HEAD IDENETIFIER_TAIL*
-  ;
+IDENTIFIER: IDENTIFIER_HEAD IDENETIFIER_TAIL*;
 
-fragment IDENETIFIER_TAIL:
-  IDENTIFIER_HEAD
-  | NUMBER
-  ;
+fragment IDENETIFIER_TAIL: IDENTIFIER_HEAD | NUMBER;
 
-fragment IDENTIFIER_HEAD: ALPHABET | UNDERSCORE ;
+fragment IDENTIFIER_HEAD: ALPHABET | UNDERSCORE;
 
 fragment ALPHABET: 'A'..'Z' | 'a'..'z';
 

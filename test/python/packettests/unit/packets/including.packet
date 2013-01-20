@@ -1,6 +1,7 @@
+# Copyright (c) 2013, The Packet Project.
 include <simple.packet>;
 
 @type_selector(c=2)
 packet Including(simple.SimpleParent) {
-  @repeated simple.Simple s;
+  @repeated simple.Simple s;  # Some comments.
 }
