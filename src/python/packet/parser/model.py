@@ -294,7 +294,7 @@ class AnnotationParam(object):  # pylint: disable=R0903
     if len(value) == 0:
       self.value = None
     elif len(value) > 1:
-      item = self.__find_enum_item('.'.join(value[-3:-2]), value[-1])
+      item = self.__find_enum_item('.'.join(value[-3:-1]), value[-1])
       self.value = item.value if item else None
     elif value[0].startswith('"') or value[0].startswith('\''):
       self.value = value[0][1:-1]
@@ -304,6 +304,7 @@ class AnnotationParam(object):  # pylint: disable=R0903
       self.value = float(value[0])
     else:
       self.value = int(value[0])
+
 
   def __find_enum_item(self, enum_name, item_name):
     ''' Finds an enum item.

@@ -108,7 +108,7 @@ enum: enum_def LBRAC enum_body RBRAC -> ^(ENUM enum_def enum_body?);
 
 enum_def: 'enum' enum_name -> enum_name;
 
-enum_body: (enum_item SEMICOLON!)*;
+enum_body: (enum_item COMMA!)* enum_item?;
 
 enum_item: enum_item_name EQ enum_item_value ->
     ^(ENUM_ITEM enum_item_name enum_item_value);
