@@ -13,6 +13,14 @@ ${self.include(packet.namespace)}
 % endfor
 </%block>\
 
+% for name, enum in pom.enums.iteritems():
+enum class ${name} {
+  % for name, item in enum.items.iteritems():
+  ${name} = ${item.value},
+  % endfor
+};
+% endfor
+
 % for name, packet in pom.packets.iteritems():
 <%
   cpp_class_name = self.class_name(packet)
