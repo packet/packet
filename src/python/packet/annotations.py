@@ -131,6 +131,6 @@ class RepeatedAnnotation(FieldLevelAnnotation):
   def __init__(self, field, model):
     FieldLevelAnnotation.__init__(self, field, model)
     assert len(model.params) == 0, \
-        'epeated does not accept parameters: %s' % field.name
+        '@repeated does not accept parameters: %s' % field.name
     field.repeated = True
 
