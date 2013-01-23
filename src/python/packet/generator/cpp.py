@@ -78,7 +78,7 @@ class CppTyping(object):
     self.__builtin_map[types.UNSIGNED_INT_64.name] = 'uint64_t'
 
   def get_cpp_type(self, packet_type, const=False, variant=TYPE_VARIANTS.NONE,
-                   repeated=False):  # pylint: disable=W0613
+                   repeated_info=(False, 1)):  # pylint: disable=W0613
     ''' Returns cpp type name for any type. '''
 
     cpp_type = None
@@ -91,8 +91,10 @@ class CppTyping(object):
     if const:
       cpp_type = 'const ' + cpp_type
 
-    if repeated:
+    if repeated_info[0]:
       cpp_type = 'std::vector<std::shared_ptr<%s>>' % cpp_type
+    elif repeated_info[1] > 1:
+      cpp_type = 'std::array<%s, %d>' % (cpp_type, repeated_info[1])
 
     # TODO(soheil): Maybe create an enum?
     if variant == TYPE_VARIANTS.POINTER:
@@ -132,10 +134,10 @@ class CppNamingStrategy(object):  # pylint: disable=R0904
     return name
 
   def get_cpptype_name(self, thetype, const=False, variant=TYPE_VARIANTS.NONE,
-                       repeated=True):
+                       repeated_info=(False, 1)):
     ''' Returns the C++ type. '''
     return self.__typing_strategy.get_cpp_type(thetype, const, variant,
-                                               repeated)
+                                               repeated_info)
 
   def get_enum_start(self, enum_name):
     ''' Returns the line for enum opening. '''

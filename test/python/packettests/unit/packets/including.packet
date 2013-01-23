@@ -10,3 +10,8 @@ enum TestEnum {
 packet Including(simple.SimpleParent) {
   @repeated simple.Simple s;  # Some comments.
 }
+
+@type_selector(c=TestEnum.ITEM2)
+packet AnotherIncluding(simple.SimpleParent) {
+  @repeated(size=2) uint8 arr;
+}

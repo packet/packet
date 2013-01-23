@@ -56,7 +56,7 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
  protected:
 % for field in packet.fields:
   ${self.offset_decl(field)}
-  % if field.repeated:
+  % if field.is_variable_length():
   ${self.field_size_decl(field)}
   % endif
 % endfor

@@ -35,14 +35,14 @@ ${self.body()}
 </%def>
 
 <%def name="type_name(type, const=False, variant=TYPE_VARIANTS.NONE,
-                      repeated=False)" buffered="True" filter="trim">
-  ${self.cpp_naming.get_cpptype_name(type, const, variant, repeated)}
+                      repeated_info=(False, 1))" buffered="True" filter="trim">
+  ${self.cpp_naming.get_cpptype_name(type, const, variant, repeated_info)}
 </%def>
 
 <%def name="field_type_name(field, const=False, variant=TYPE_VARIANTS.NONE)"
     buffered="True" filter="trim">
   ${self.cpp_naming.get_cpptype_name(field.type, const, variant,
-                                     field.repeated)}
+                                     field.repeated_info)}
 </%def>
 
 <%def name="get_parent(packet)" buffered="True" filter="trim">
@@ -54,7 +54,9 @@ ${self.body()}
 </%def>
 
 <%def name="common_include()" buffered="True" filter="trim">
+#include <array>
 #include <memory>
+#include <vector>
 #include <utility>
 
 #include "cyrus/iolib/io.h"
@@ -117,7 +119,7 @@ ${self.body()}
 </%def>
 
 <%def name="setter_name(field)" buffered="True" filter="trim">
-  % if field.repeated:
+  % if field.is_variable_length():
   add_${field.name}
   % else:
   set_${field.name}
@@ -136,13 +138,17 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
+      % if field.is_variable_length():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
+      % else:
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE, repeated_info=field.repeated_info)} ${field.name}
+      % endif
     </%def>
   </%self:method_prototype>
 </%def>
 
 <%def name="static_setter_name(field)" buffered="True" filter="trim">
-  % if field.repeated:
+  % if field.is_variable_length():
     add_${field.name}_
   % else:
     set_${field.name}_
@@ -161,7 +167,12 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
+      % if field.is_variable_length():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
+      % else:
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE,
+                       repeated_info=field.repeated_info)} ${field.name}, cyrus::io::IoVector& io_vector
+      % endif
     </%def>
   </%self:method_prototype>
 </%def>

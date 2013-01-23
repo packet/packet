@@ -86,11 +86,11 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
 
   def __find_field(self, name):
     ''' Finds a field in the packet hierarchy, otherwise return None. '''
-    packet = self._packet.parent  # We start from the parent packet.
+    pkt = self._packet.parent  # We start from the parent packet.
     field = None
-    while packet and not field:
-      field = packet.find_field(name)
-      packet = packet.parent
+    while pkt and not field:
+      field = pkt.find_field(name)
+      pkt = pkt.parent
     return field
 
   def get_condition(self):
@@ -130,7 +130,10 @@ class RepeatedAnnotation(FieldLevelAnnotation):
       must have another field annotated with size accordingly.'''
   def __init__(self, field, model):
     FieldLevelAnnotation.__init__(self, field, model)
-    assert len(model.params) == 0, \
-        '@repeated does not accept parameters: %s' % field.name
-    field.repeated = True
+    if len(model.params) == 1:
+      assert model.params[0].name == 'size', \
+          '@repeated only accepts "size" as its parameter: %s' % field.name
+      field.repeated_info = (False, int(model.params[0].value))
+    else:
+      field.repeated_info = (True, None)
 

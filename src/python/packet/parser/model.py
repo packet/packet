@@ -245,12 +245,10 @@ class Field(object):  # pylint: disable=R0903
     ''' @param field: The parsed field.
         @param pkt: The field's packet. '''
     self.name = field.values[0]
-
     self.packet = pkt
     self.type = self._find_type('.'.join(field.field_type.values))
     self.offset = [0, ()]
-    self.repeated = False
-    self.size_field = None
+    self.repeated_info = (False, 1)
     self.annotations = {}
 
   def process_annotations(self, annotation_list):
@@ -260,6 +258,18 @@ class Field(object):  # pylint: disable=R0903
       annot_obj = Annotation(annotation, self.packet)
       self.annotations[annot_obj.name] = \
           create_field_level_annotation(self, annot_obj)
+
+  def is_variable_length(self):
+    ''' Whether the field is variable size (repeated with no fixed size). '''
+    return self.repeated_info[0]
+
+  def get_size_field(self):
+    ''' Returns the field size. '''
+    return self.repeated_info[1] if self.repeated_info[0] else None
+
+  def get_repeated_count(self):
+    ''' Returns the repated count of the field. '''
+    return self.repeated_info[1] if not self.repeated_info[0] else None
 
   def _find_type(self, type_name):
     ''' Finds the type. '''

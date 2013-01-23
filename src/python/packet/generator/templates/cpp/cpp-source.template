@@ -50,9 +50,9 @@ ${self.getter_prototype(field, qualified=True)} {
 
 ${self.static_getter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
-  % if field.repeated:
+  % if field.is_variable_length():
   auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
-    % if field.size_field:
+    % if field.get_size_field():
   auto count = ${cpp_class_name}::${self.static_getter_name(field.size_field)}(io_vector);
     % else:
   auto count = 0;
@@ -70,7 +70,7 @@ ${self.setter_prototype(field, qualified=True)} {
 
 ${self.static_setter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
-  % if field.repeated:
+  % if field.is_variable_length():
   offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
   auto element_size = ${field.name}.${self.size_method_name(field.packet)}();
   auto packet_size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
@@ -79,10 +79,10 @@ ${self.static_setter_prototype(field, qualified=True)} {
   ${self.class_name(packet.size_field.packet)}::${
       self.static_setter_name(packet.size_field)}(packet_size + element_size,
       io_vector);
-    % if field.size_field:
-  auto count = ${self.class_name(field.size_field.packet)}::${
-      self.static_getter_name(field.size_field)}(io_vector);
-  ${self.class_name(field.size_field.packet)}::${
+    % if field.get_size_field():
+  auto count = ${self.class_name(field.getsize_field().packet)}::${
+      self.static_getter_name(field.get_size_field())}(io_vector);
+  ${self.class_name(field.get_size_field().packet)}::${
       self.static_setter_name(field.size_field)}(count + 1, io_vector);
     % endif
   % else:
@@ -99,11 +99,11 @@ ${self.offset_prototype(field, qualified=True)} {
   return ${field.offset[0]};
 }
 
-  % if field.repeated:
+  % if field.is_variable_length():
 ${self.field_size_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
   auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
-    % if field.size_field:
+    % if field.get_size_field():
   auto count = ${cpp_class_name}::${self.static_getter_name(field.size_field)}(io_vector);
   return io_vector.get_repeated_data_size<${self.type_name(field.type)}>(
       offset, count, size);
