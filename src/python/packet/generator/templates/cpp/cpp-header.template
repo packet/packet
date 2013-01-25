@@ -19,6 +19,7 @@ enum class ${name} {
   ${name} = ${item.value},
   % endfor
 };
+
 % endfor
 
 % for name, packet in pom.packets.iteritems():
@@ -35,7 +36,7 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   };
 
   ${self.iovector_constructor_prototype(packet)};
-  ${self.size_constructor_prototype(packet)};
+  ${self.size_constructor_prototype(packet, packet.min_size)};
   virtual ~${cpp_class_name}();
 
   ${self.init_method_decl(packet)}

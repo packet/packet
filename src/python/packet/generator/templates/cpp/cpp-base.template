@@ -71,8 +71,10 @@ ${self.body()}
   ${self.class_name(packet)}(const cyrus::io::IoVector& io_vector)
 </%def>
 
-<%def name="size_constructor_prototype(packet)" buffered="True" filter="trim">
-  ${self.class_name(packet)}(size_t size)
+<%def name="size_constructor_prototype(packet, default_size=None)" buffered="True"
+    filter="trim">
+  ${self.class_name(packet)}(size_t size ${
+      '= ' + str(packet.min_size) if default_size else ''})
 </%def>
 
 <%def name="method_prototype(const=False, qualified=False, static=False)"

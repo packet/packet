@@ -120,7 +120,7 @@ class SizeAnnotation(FieldLevelAnnotation):
     if len(model.params) == 1:
       # TODO(soheil): We need to make sure that the field is a vector
       referencing_field = field.packet.find_field(model.params[0].name)
-      referencing_field.size_field = field
+      referencing_field.repeated_info = (True, field)
     else:
       field.packet.size_field = field
 

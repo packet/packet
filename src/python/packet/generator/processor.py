@@ -85,14 +85,14 @@ class SizeProcessor(ModelProcessor):
 
   def _set_packet_minimum_size(self, packet):
     ''' Finds the minimum size of a packet. '''
-    packet.min_size = self._get_packet_minimum_size(packet)
+    packet.min_size = self._calculate_packet_minimum_size(packet)
 
-  def _get_packet_minimum_size(self, packet):
+  def _calculate_packet_minimum_size(self, packet):
     ''' Returns the minimum size of the packet. '''
     if not packet:
       return 0
 
-    min_size = self._get_packet_minimum_size(packet.parent)
+    min_size = self._calculate_packet_minimum_size(packet.parent)
     for field in packet.fields:
       if field.repeated_info[0]:
         continue
@@ -101,7 +101,7 @@ class SizeProcessor(ModelProcessor):
       if isinstance(field.type, BuiltInType):
         min_size += field.type.length_in_bytes * count
       else:
-        min_size += self._get_packet_minimum_size(field.type) * count
+        min_size += self._calculate_packet_minimum_size(field.type) * count
 
     return min_size
 
