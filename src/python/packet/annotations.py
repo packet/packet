@@ -122,7 +122,7 @@ class SizeAnnotation(FieldLevelAnnotation):
       referencing_field = field.packet.find_field(model.params[0].name)
       referencing_field.repeated_info = (True, field)
     else:
-      field.packet.size_field = field
+      field.packet.size_info = (True, field)
 
 @field_level_annotation('repeated')  # pylint: disable=R0903
 class RepeatedAnnotation(FieldLevelAnnotation):

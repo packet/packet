@@ -210,7 +210,10 @@ class Packet(object):  # pylint: disable=R0903
     self.name = pkt.values[0]
     self.pom = pom
     self.children = []
-    self.size_field = None
+    # size_info maintains a tuple. If the first element is false, the packet has
+    # a fixed length, and the second element is the length. Otherwise, the
+    # second element is the size field.
+    self.size_info = (True, None)
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
@@ -238,6 +241,14 @@ class Packet(object):  # pylint: disable=R0903
       if field.name == name:
         return field
     return None
+
+  def is_fixed_length(self):
+    ''' Whether the packet has a fixed length. '''
+    return self.size_info[0]
+
+  def get_size_field(self):
+    ''' Returns the size field if the packet has a variable length. '''
+    return self.size_info[1] if not self.is_fixed_length() else None
 
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''

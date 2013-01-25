@@ -78,21 +78,28 @@ class SizeProcessor(ModelProcessor):
   ''' Validates packets and makes sure they have a size field, and it is not
       overriden in any derived packets. '''
   def process(self, model):
+    for included_pom in model.includes.values():
+      self.process(included_pom)
+
     for packet in model.packets.values():
-      self._set_packet_minimum_size(packet)
-      self._set_size_field_in_packet(packet)
-      self._set_size_field_in_fields(packet)
+      self._set_min_size_in_packet(packet)
 
-  def _set_packet_minimum_size(self, packet):
+    for packet in model.packets.values():
+      self._set_size_info_in_packet(packet)
+      self._set_size_info_in_fields(packet)
+
+  def _set_min_size_in_packet(self, packet):
     ''' Finds the minimum size of a packet. '''
-    packet.min_size = self._calculate_packet_minimum_size(packet)
+    packet.min_size = self._calculate_min_size_in_packet(packet)
 
-  def _calculate_packet_minimum_size(self, packet):
+    print "Min size for %s is %d" % (packet.name, packet.min_size)
+
+  def _calculate_min_size_in_packet(self, packet):
     ''' Returns the minimum size of the packet. '''
     if not packet:
       return 0
 
-    min_size = self._calculate_packet_minimum_size(packet.parent)
+    min_size = self._calculate_min_size_in_packet(packet.parent)
     for field in packet.fields:
       if field.repeated_info[0]:
         continue
@@ -101,28 +108,45 @@ class SizeProcessor(ModelProcessor):
       if isinstance(field.type, BuiltInType):
         min_size += field.type.length_in_bytes * count
       else:
-        min_size += self._calculate_packet_minimum_size(field.type) * count
+        min_size += self._calculate_min_size_in_packet(field.type) * count
 
     return min_size
 
-  def _set_size_field_in_packet(self, packet):  # pylint: disable=R0201
+  def _set_size_info_in_packet(self, packet):  # pylint: disable=R0201
     ''' Validates and sets size in all dervied packets. '''
     if not packet:
       return
 
-    if packet.size_field:
+    self._set_size_info_in_packet(packet.parent)
+
+    if packet.get_size_field():
       if packet.parent:
-        assert packet.size_field == packet.parent.size_field, \
-               'Dervied packet cannot override size field: %s' % packet.name
+        assert packet.get_size_field() == packet.parent.get_size_field(), \
+               'Dervied packet cannot override size field: %s.%s vs %s.%s' % \
+               (packet.name, packet.get_size_field(), packet.parent.name,
+                packet.parent.get_size_field())
       return
 
-    if not packet.size_field:
-      assert packet.parent, 'Packet does not have any size field: %s' % \
-                            packet.name
-      self._set_size_field_in_packet(packet.parent)
-      packet.size_field = packet.parent.size_field
+    if self._is_fixed_size(packet):
+      packet.size_info = (False, packet.min_size)
+      return
 
-  def _set_size_field_in_fields(self, packet):
+    assert packet.parent and packet.parent.get_size_field(), \
+        'Packet does not have any size field: %s' % packet.name
+
+    packet.size_info = (True, packet.parent.get_size_field())
+
+  def _is_fixed_size(self, packet):
+    ''' Wether the packet is fixed in size. '''
+    if packet.parent and not self._is_fixed_size(packet.parent):
+      return False
+
+    for field in packet.fields:
+      if field.is_variable_length():
+        return False
+    return True
+
+  def _set_size_info_in_fields(self, packet):
     ''' Sets size_field for fields. '''
     i = 0
     for field in packet.fields:
