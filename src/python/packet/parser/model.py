@@ -242,13 +242,13 @@ class Packet(object):  # pylint: disable=R0903
         return field
     return None
 
-  def is_fixed_length(self):
-    ''' Whether the packet has a fixed length. '''
-    return self.size_info[0]
+  def get_fixed_size(self):
+    ''' Returns the fixed size. '''
+    return self.size_info[1] if not self.size_info[0] else None
 
   def get_size_field(self):
     ''' Returns the size field if the packet has a variable length. '''
-    return self.size_info[1] if not self.is_fixed_length() else None
+    return self.size_info[1] if not self.get_fixed_size() else None
 
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''

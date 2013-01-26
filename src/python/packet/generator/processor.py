@@ -92,8 +92,6 @@ class SizeProcessor(ModelProcessor):
     ''' Finds the minimum size of a packet. '''
     packet.min_size = self._calculate_min_size_in_packet(packet)
 
-    print "Min size for %s is %d" % (packet.name, packet.min_size)
-
   def _calculate_min_size_in_packet(self, packet):
     ''' Returns the minimum size of the packet. '''
     if not packet:
@@ -136,9 +134,9 @@ class SizeProcessor(ModelProcessor):
 
     packet.size_info = (True, packet.parent.get_size_field())
 
-  def _is_fixed_size(self, packet):
+  def _is_fixed_size(self, packet):  # pylint: disable=R0201
     ''' Wether the packet is fixed in size. '''
-    if packet.parent and not self._is_fixed_size(packet.parent):
+    if packet.parent and not packet.parent.get_fixed_size():
       return False
 
     for field in packet.fields:
