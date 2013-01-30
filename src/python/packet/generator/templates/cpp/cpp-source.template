@@ -37,7 +37,7 @@ ${cpp_class_name}::${self.size_constructor_prototype(packet)}
 ${cpp_class_name}::~${cpp_class_name}() {}
 
 ${self.init_method_prototype(packet, qualified=True)} {
-  % if not packet.get_fixed_size():
+  % if not packet.is_fixed_size():
   ${cpp_class_name}::${self.setter_name(packet.get_size_field())}(MIN_SIZE);
   % endif
 }
@@ -125,7 +125,7 @@ ${self.size_prototype(packet, qualified=True)} {
 }
 
 ${self.static_size_prototype(packet, qualified=True)} {
-  % if packet.get_fixed_size():
+  % if packet.is_fixed_size():
   return ${packet.get_fixed_size()};
   % else:
   return ${self.class_name(packet.get_size_field().packet)}::${

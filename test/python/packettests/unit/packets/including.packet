@@ -15,3 +15,16 @@ packet Including(simple.SimpleParent) {
 packet AnotherIncluding(simple.SimpleParent) {
   @repeated(size=2) uint8 arr;
 }
+
+@bigendian
+packet BigEndianPacket {
+  uint16 a;
+}
+
+@type_selector(a=1)
+packet DerivedBigEndian(BigEndianPacket) {
+  uint16 b;
+  uint32 c;
+  uint8 d;
+}
+

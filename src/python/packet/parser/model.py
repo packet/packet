@@ -202,7 +202,7 @@ class EnumItem(object):  # pylint: disable=R0903
     self.enum = enum
 
 # TODO(soheil): Maybe extend as Type.
-class Packet(object):  # pylint: disable=R0903
+class Packet(object):  # pylint: disable=R0902,R0903
   ''' Represent a packet. '''
   def __init__(self, pom, pkt):
     ''' @param pom: pkt's object model.
@@ -214,6 +214,7 @@ class Packet(object):  # pylint: disable=R0903
     # a fixed length, and the second element is the length. Otherwise, the
     # second element is the size field.
     self.size_info = (True, None)
+    self.big_endian = False
 
     # We cannot load the Packet here, because POM runs in the context of a
     parent = ''.join(pkt.extends.values) if pkt.extends else 'object'
@@ -249,6 +250,10 @@ class Packet(object):  # pylint: disable=R0903
   def get_size_field(self):
     ''' Returns the size field if the packet has a variable length. '''
     return self.size_info[1] if not self.get_fixed_size() else None
+
+  def is_fixed_size(self):
+    ''' Returns whether the packet is fixed in size. '''
+    return not self.size_info[0]
 
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''

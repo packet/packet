@@ -106,6 +106,14 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
       cond.append((field, param.value))
     return cond
 
+@packet_level_annotation('bigendian')  # pylint: disable=R0903
+class EndianAnnotation(PacketLevelAnnotation):
+  ''' Used for annotate big endian packets.
+      Note: All derived packets of a bigendian packets are big endian. '''
+  def __init__(self, packet, model):
+    PacketLevelAnnotation.__init__(self, packet, model)
+    packet.big_endian = True
+
 @field_level_annotation('size')  # pylint: disable=R0903
 class SizeAnnotation(FieldLevelAnnotation):
   ''' The size annotation is used for the field storing the size of its

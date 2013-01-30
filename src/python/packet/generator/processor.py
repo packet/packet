@@ -126,6 +126,7 @@ class SizeProcessor(ModelProcessor):
       return
 
     if self._is_fixed_size(packet):
+      assert packet.min_size != 0, 'Packet size is zero: %s' % packet.name
       packet.size_info = (False, packet.min_size)
       return
 
@@ -168,4 +169,22 @@ class SizeProcessor(ModelProcessor):
         assert other_field == field or not other_field.is_variable_length() or \
             other_field.get_size_field(), \
             'Found two implicitly size arrarys in %s' % field.packet.name
+
+class EndianProcessor(ModelProcessor):
+  ''' Validates packets and makes sure they have a size field, and it is not
+      overriden in any derived packets. '''
+  def process(self, model):
+    for included_pom in model.includes.values():
+      self.process(included_pom)
+
+    for packet in model.packets.values():
+      self._set_endian(packet)
+
+  def _set_endian(self, packet):
+    ''' Sets the endianess of the packet. '''
+    if packet.big_endian or not packet.parent:
+      return
+
+    self._set_endian(packet.parent)
+    packet.big_endian = packet.parent.big_endian
 
