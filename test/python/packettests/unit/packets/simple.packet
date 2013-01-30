@@ -18,3 +18,10 @@ packet YetAnotherSimple(SimpleParent) {
   @repeated Simple simples;
 }
 
+@type_selector(c=4)
+packet YetYetAnotherSimple(SimpleParent) {
+  @size(simples) int8 s;
+  @repeated int8 simples;
+}
+
+
