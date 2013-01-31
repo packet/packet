@@ -60,6 +60,7 @@ ${self.body()}
 #include <utility>
 
 #include "cyrus/iolib/io.h"
+#include "cyrus/concurrency/actor.h"
 </%def>
 
 <%def name="include(namespace, include_prefix='')" buffered="True"
@@ -82,6 +83,10 @@ ${self.body()}
   ${'static' if static and not qualified else ''} ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
 </%def>
 
+<%def name="getter_name(field)" buffered="True" filter="trim">
+  get_${field.name}
+</%def>
+
 <%def name="getter_prototype(field, qualified=False)" buffered="True"
       filter="trim">
   <%self:method_prototype qualified="${qualified}" const="True">
@@ -89,7 +94,7 @@ ${self.body()}
       ${self.field_type_name(field)}
     </%def>
     <%def name="method_name()" filter="trim">
-      get_${field.name}
+      ${self.getter_name(field)}
     </%def>
     <%def name="class_name()" filter="trim">
       ${self.class_name(field.packet)}

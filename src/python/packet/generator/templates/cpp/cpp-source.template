@@ -148,13 +148,31 @@ ${self.static_size_prototype(packet, qualified=True)} {
 % endfor
 
 <%block name="footer">
-namespace cyrus {
-namespace io {
-
 % for packet in reversed(pom.packets.values()):
 <%
   cpp_class_name = self.class_name(packet, qualified=True)
 %>\
+
+namespace cyrus {
+namespace concurrency {
+
+template<>
+void emit_message<const ${cpp_class_name}>(
+    std::shared_ptr<const ${cpp_class_name}> msg) {
+  % for p in packet.children:
+  if (${self.type_selector_cond(p, 'msg')}) {
+    emit_message<const ${self.class_name(p, qualified=True)}>(
+        std::dynamic_pointer_cast<const ${self.class_name(p, qualified=True)}>(msg));
+  }
+  % endfor
+  return cyrus::concurrency::internal::do_emit_message(msg);
+}
+
+}  // namespace concurrency
+}  // namespace cyrus
+
+namespace cyrus {
+namespace io {
 
 template<>
 ::std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const ::cyrus::io::IoVector& io_vec) {
@@ -166,20 +184,25 @@ template<>
   return ::std::make_shared<${cpp_class_name}>(io_vec);
 }
 
-% endfor
-
 }  // namespace io
 }  // namespace cyrus
+
+% endfor
+
 </%block>
 
 
-<%def name="type_selector_cond(packet)" buffered="True" filter="trim">
+<%def name="type_selector_cond(packet, var_name=None)" buffered="True" filter="trim">
   <%
     conditions = packet.get_type_selector_condition()
     assert conditions, 'Type selector cannot be empty for %s' % packet.name
   %>
   % for field, value in conditions:
+    % if not var_name:
   ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value} &&
+    % else:
+  ${var_name}->${self.getter_name(field)}() == ${value} &&
+    % endif
   % endfor
   true
 </%def>
