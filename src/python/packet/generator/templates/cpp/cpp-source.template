@@ -41,6 +41,9 @@ ${self.init_method_prototype(packet, qualified=True)} {
   ${cpp_class_name}::${self.setter_name(packet.get_size_field())}(MIN_SIZE);
   % endif
   // Invariants.
+  % for field, value in packet.get_type_selector_condition(True):
+  ${self.setter_name(field)}(${value});
+  % endfor
 }
 
 % for field in packet.fields:
@@ -172,13 +175,12 @@ template<>
 
 <%def name="type_selector_cond(packet)" buffered="True" filter="trim">
   <%
-    annot = packet.annotations.get('type_selector')
-    assert annot, 'Type selector cannot be empty for %s' % packet.name
+    conditions = packet.get_type_selector_condition()
+    assert conditions, 'Type selector cannot be empty for %s' % packet.name
   %>
-  % if annot:
-    % for field, value in annot.get_condition():
-     ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value}
-    % endfor
-  % endif
+  % for field, value in conditions:
+  ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value} &&
+  % endfor
+  true
 </%def>
 

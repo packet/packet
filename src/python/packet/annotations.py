@@ -99,7 +99,8 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
     for param in self._model.params:
       field = self.__find_field(param.name)
       if not field:
-        raise Exception('Field of type_selector not found: %s' % param.name)
+        raise Exception('Field of type_selector not found: %s.%s' %
+                        (self._packet.name, param.name))
       if param.value == None:
         raise Exception('type_selector does not have a value: %s' %
                         self._packet.name)

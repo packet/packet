@@ -255,6 +255,18 @@ class Packet(object):  # pylint: disable=R0902,R0903
     ''' Returns whether the packet is fixed in size. '''
     return not self.size_info[0]
 
+  def get_type_selector_condition(self, recursive=False):
+    ''' Returns the type selector condition. '''
+    conditions = []
+    annot = self.annotations.get('type_selector')
+    if not annot:
+      return conditions
+
+    conditions = annot.get_condition()
+    if recursive and self.parent:
+      conditions += self.parent.get_type_selector_condition(recursive)
+    return conditions
+
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''
   def __init__(self, pkt, field):
