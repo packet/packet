@@ -40,11 +40,14 @@ ${self.init_method_prototype(packet, qualified=True)} {
   % if not packet.is_fixed_size():
   ${cpp_class_name}::${self.setter_name(packet.get_size_field())}(MIN_SIZE);
   % endif
+  // Invariants.
 }
 
 % for field in packet.fields:
 <%
   cpp_type_name = self.field_type_name(field)
+  big_endian = 'true' if packet.big_endian and \
+      isinstance(field.type, BuiltInType) else 'false'
 %>\
 ${self.getter_prototype(field, qualified=True)} {
   return ${cpp_class_name}::${self.static_getter_name(field)}(vector);
@@ -59,9 +62,10 @@ ${self.static_getter_prototype(field, qualified=True)} {
     % else:
   auto count = 0;
     % endif
-  return io_vector.read_repeated_data<${self.type_name(field.type)}>(offset, count, size);
+  return io_vector.read_repeated_data<${self.type_name(field.type)}, ${
+      big_endian}>(offset, count, size);
   % else:
-  return io_vector.read_data<${cpp_type_name}>(offset);
+  return io_vector.read_data<${cpp_type_name}, ${big_endian}>(offset);
   % endif
 }
 
@@ -81,7 +85,8 @@ ${self.static_setter_prototype(field, qualified=True)} {
     % endif
   auto packet_size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
   io_vector.expand(element_size, packet_size);
-  io_vector.write_data<${self.type_name(field.type)}>(${field.name}, offset);
+  io_vector.write_data<${self.type_name(field.type)}, ${big_endian}>(${
+      field.name}, offset);
     % if packet.get_size_field():
   ${self.class_name(packet.get_size_field().packet)}::${
       self.static_setter_name(packet.get_size_field())}(packet_size + element_size,
@@ -94,7 +99,7 @@ ${self.static_setter_prototype(field, qualified=True)} {
       self.static_setter_name(field.get_size_field())}(count + 1, io_vector);
     % endif
   % else:
-  io_vector.write_data<${cpp_type_name}>(${field.name}, offset);
+  io_vector.write_data<${cpp_type_name}, ${big_endian}>(${field.name}, offset);
   % endif
 }
 % endfor
