@@ -32,6 +32,7 @@ from packet.parser.model import parse_file
 LOG = logging.getLogger('packet.generator.base')
 
 RECURSIVE_OPT_NAME = 'recursive'
+GENERATOR_PLUGIN = 'gen_plugin'
 
 class PacketGenerator(object):
   ''' The base class for all genrerators. All packet code generators must

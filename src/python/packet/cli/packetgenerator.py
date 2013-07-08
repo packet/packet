@@ -1,21 +1,21 @@
-# 
+#
 # Copyright (c) 2012, The Packet project authors. All rights reserved.
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# 
+#
 # The GNU General Public License is contained in the file LICENSE.
-# 
+#
 ''' Command line interface for generators. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
@@ -27,7 +27,7 @@ import sys
 import packet
 from packet import generator, boot_packet
 from packet.generator import get_generator
-from packet.generator.base import RECURSIVE_OPT_NAME
+from packet.generator import base
 
 LOG = logging.getLogger('packet.cli.PacketGenerator')
 
@@ -41,6 +41,9 @@ def parse_args():
   parser.add_argument('-l', '--lang', type=str, nargs=1, required=True,
                       choices=generator.supported_languages(),
                       help='generate codes in the specified language.')
+  parser.add_argument('-e', '--extension', type=str, nargs=1,
+                      help='extended generator that genetares extra code for '
+                           'given packet.')
   parser.add_argument('-o', '--output', type=str, nargs=1,
                       help='the output directory for generated codes.')
   parser.add_argument('-p', '--packetpath', type=str, nargs=1,
@@ -75,7 +78,8 @@ def main():
   LOG.debug('Using packet path: %s ' % str(packet.packet_paths))
 
   opts = {
-          RECURSIVE_OPT_NAME: args.recursive
+          base.RECURSIVE_OPT_NAME: args.recursive,
+          base.GENERATOR_PLUGIN: args.extension
           }
 
   packet_generator = packet_generator_class()
