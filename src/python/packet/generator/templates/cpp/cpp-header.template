@@ -109,5 +109,22 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 </%def>\
 
 <%block name="footer">
+namespace cyrus {
+namespace concurrency {
+namespace internal {
+% for name, packet in pom.packets.iteritems():
+<%
+  cpp_class_name = self.class_name(packet, qualified=True)
+%>\
+
+template <>
+MessageSerializer* get_default_serializer<${cpp_class_name}>(
+    SerializationManager* manager);
+
+% endfor
+}  // namespace internal
+}  // namespace concurrency
+}  // namespace cyrus
+
 #endif  // ${self.header_macro()}
 </%block>

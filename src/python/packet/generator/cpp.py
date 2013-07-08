@@ -116,6 +116,7 @@ class CppTyping(object):
     #               length and stuff like that.
     return 'vector<%s>' % element_type
 
+
 class CppNamingStrategy(object):  # pylint: disable=R0904
   ''' Default naming strategy for C++. '''
   __DEF_TEXTS = enum(ENUM='enum class',

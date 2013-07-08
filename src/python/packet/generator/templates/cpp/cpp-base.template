@@ -28,7 +28,7 @@ ${self.body()}
 
 <%def name="class_name(packet, qualified=False)" buffered="True" filter="trim">
 % if qualified:
-  ${namespace_name(packet.pom)}::${packet.name}
+  ${namespace_name(packet.pom)}::${self.cpp_naming.get_class_name(packet.name)}
 % else:
   ${self.cpp_naming.get_class_name(packet.name)}
 % endif
