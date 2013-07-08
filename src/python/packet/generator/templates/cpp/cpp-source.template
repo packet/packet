@@ -158,6 +158,8 @@ namespace concurrency {
 
 using cyrus::concurrency::internal::do_emit_message;
 using cyrus::concurrency::internal::Context;
+using cyrus::concurrency::internal::MessageSerializer;
+using cyrus::concurrency::internal::PacketSerializer;
 
 template <>
 bool emit_message(const ${cpp_class_name}& msg,
@@ -188,6 +190,15 @@ bool emit_message(const ${cpp_class_name}& msg,
   return do_emit_message(msg, context, actor);
 }
 
+namespace internal {
+
+template <>
+MessageSerializer* get_default_serializer<${cpp_class_name}>(
+    SerializationManager* manager) {
+  return new PacketSerializer<${cpp_class_name}>(manager);
+}
+
+}  // namespace internal
 }  // namespace concurrency
 }  // namespace cyrus
 
