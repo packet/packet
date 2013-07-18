@@ -78,7 +78,7 @@ class CppTyping(object):
     self.__builtin_map[types.UNSIGNED_INT_64.name] = 'uint64_t'
 
   def get_cpp_type(self, packet_type, const=False, variant=TYPE_VARIANTS.NONE,
-                   repeated_info=(False, 1)):  # pylint: disable=W0613
+                   repeated_info=None):  # pylint: disable=W0613
     ''' Returns cpp type name for any type. '''
 
     cpp_type = None
@@ -91,10 +91,11 @@ class CppTyping(object):
     if const:
       cpp_type = 'const ' + cpp_type
 
-    if repeated_info[0]:
-      cpp_type = 'std::vector<std::shared_ptr<%s>>' % cpp_type
-    elif repeated_info[1] > 1:
-      cpp_type = 'std::array<%s, %d>' % (cpp_type, repeated_info[1])
+    if repeated_info:
+      if repeated_info.count:
+        cpp_type = 'std::array<%s, %d>' % (cpp_type, repeated_info.count)
+      else:
+        cpp_type = 'std::vector<std::shared_ptr<%s>>' % cpp_type
 
     # TODO(soheil): Maybe create an enum?
     if variant == TYPE_VARIANTS.POINTER:

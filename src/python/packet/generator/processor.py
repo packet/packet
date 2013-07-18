@@ -99,14 +99,15 @@ class SizeProcessor(ModelProcessor):
 
     min_size = self._calculate_min_size_in_packet(packet.parent)
     for field in packet.fields:
-      if field.repeated_info[0]:
+      # These fields are implicitly sized.
+      if not field.has_fixed_size():
         continue
 
-      count = field.repeated_info[1]
-      if isinstance(field.type, BuiltInType):
-        min_size += field.type.length_in_bytes * count
-      else:
-        min_size += self._calculate_min_size_in_packet(field.type) * count
+      size = field.type.length_in_bytes if isinstance(field.type, BuiltInType) \
+          else self._calculate_min_size_in_packet(field.type)
+      count = field.get_repeated_count() if field.is_repeated() \
+          else 1
+      min_size += size * count
 
     return min_size
 
@@ -141,7 +142,7 @@ class SizeProcessor(ModelProcessor):
       return False
 
     for field in packet.fields:
-      if field.is_variable_length():
+      if not field.has_fixed_size():
         return False
     return True
 
@@ -157,7 +158,7 @@ class SizeProcessor(ModelProcessor):
     if not field:
       return
 
-    if field.is_variable_length() and not field.get_size_field():
+    if field.has_implicit_size():
       assert len(field.packet.children) == 0, \
           'A packet with implicitly-sized arrays cannot be overriden: %s.%s' % \
               (field.packet.name, field.name)
@@ -166,8 +167,7 @@ class SizeProcessor(ModelProcessor):
           'packet: %s.%s' % (field.packet.name, field.name)
 
       for other_field in field.packet.fields:
-        assert other_field == field or not other_field.is_variable_length() or \
-            other_field.get_size_field(), \
+        assert other_field == field or not other_field.has_implicit_size(), \
             'Found two implicitly size arrarys in %s' % field.packet.name
 
 class EndianProcessor(ModelProcessor):

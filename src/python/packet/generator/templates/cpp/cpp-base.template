@@ -35,7 +35,7 @@ ${self.body()}
 </%def>
 
 <%def name="type_name(type, const=False, variant=TYPE_VARIANTS.NONE,
-                      repeated_info=(False, 1))" buffered="True" filter="trim">
+                      repeated_info=None)" buffered="True" filter="trim">
   ${self.cpp_naming.get_cpptype_name(type, const, variant, repeated_info)}
 </%def>
 
@@ -126,10 +126,10 @@ ${self.body()}
 </%def>
 
 <%def name="setter_name(field)" buffered="True" filter="trim">
-  % if field.is_variable_length():
-  add_${field.name}
-  % else:
+  % if field.has_fixed_size():
   set_${field.name}
+  % else:
+  add_${field.name}
   % endif
 </%def>
 
@@ -145,20 +145,20 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      % if field.is_variable_length():
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
-      % else:
+      % if field.has_fixed_size():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE, repeated_info=field.repeated_info)} ${field.name}
+      % else:
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
       % endif
     </%def>
   </%self:method_prototype>
 </%def>
 
 <%def name="static_setter_name(field)" buffered="True" filter="trim">
-  % if field.is_variable_length():
-    add_${field.name}_
-  % else:
+  % if field.has_fixed_size():
     set_${field.name}_
+  % else:
+    add_${field.name}_
   % endif
 </%def>
 
@@ -174,11 +174,11 @@ ${self.body()}
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      % if field.is_variable_length():
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
-      % else:
+      % if field.has_fixed_size():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE,
                        repeated_info=field.repeated_info)} ${field.name}, cyrus::io::IoVector& io_vector
+      % else:
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
       % endif
     </%def>
   </%self:method_prototype>

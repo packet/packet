@@ -276,7 +276,9 @@ class Field(object):  # pylint: disable=R0903
     self.packet = pkt
     self.type = self._find_type('.'.join(field.field_type.values))
     self.offset = [0, ()]
-    self.repeated_info = (False, 1)
+    # Stores the meta data about repreated fields (ie., arrays) in the following
+    # form: (SIZE_FIELD, COUNT_FIELD, COUNT)
+    self.repeated_info = None
     self.annotations = {}
 
   def process_annotations(self, annotation_list):
@@ -287,17 +289,38 @@ class Field(object):  # pylint: disable=R0903
       self.annotations[annot_obj.name] = \
           create_field_level_annotation(self, annot_obj)
 
-  def is_variable_length(self):
-    ''' Whether the field is variable size (repeated with no fixed size). '''
-    return self.repeated_info[0]
+  def is_repeated(self):
+    ''' Whether the field is a repeated field. '''
+    return self.repeated_info != None
+
+  def has_implicit_size(self):
+    ''' Whether the field has implicit size (repeated with no fixed size nor
+        count). '''
+    return self.repeated_info and self.repeated_info.has_implicit_size()
+
+  def is_fixed_size_repeated(self):
+    ''' Whether the field has a fixed size. '''
+    return self.repeated_info and self.repeated_info.count
+
+  def has_fixed_size(self):
+    ''' Whether the field is fixed in size. '''
+    return not self.is_repeated() or self.is_fixed_size_repeated()
+
+  def set_repeated_info(self, size_field=None, count_field=None, count=None):
+    ''' Sets the repeat info of the field. '''
+    self.repeated_info = RepeatedInfo(size_field, count_field, count)
 
   def get_size_field(self):
-    ''' Returns the field size. '''
-    return self.repeated_info[1] if self.repeated_info[0] else None
+    ''' Returns the size field. '''
+    return self.repeated_info.size_field if self.repeated_info else None
+
+  def get_count_field(self):
+    ''' Returns the count field. '''
+    return self.repeated_info.count_field if self.repeated_info else None
 
   def get_repeated_count(self):
-    ''' Returns the repated count of the field. '''
-    return self.repeated_info[1] if not self.repeated_info[0] else None
+    ''' Returns the constant count of a const-size repreated field. '''
+    return self.repeated_info.count if self.repeated_info else None
 
   def _find_type(self, type_name):
     ''' Finds the type. '''
@@ -310,6 +333,20 @@ class Field(object):  # pylint: disable=R0903
     if not type_obj:
       raise Exception('Type not found: %s' % type_name)
     return type_obj
+
+class RepeatedInfo(object):
+  ''' Stores information about repeated fields. '''
+  def __init__(self, size_field=None, count_field=None, count=None):
+    self.size_field = size_field
+    self.count_field = count_field
+    self.count = count
+
+  def has_implicit_size(self):
+    ''' Whether the field is varilable size (repated with no size nor count).
+    '''
+    return self.size_field == None and self.count_field == None and \
+        self.count == None
+
 
 class Annotation(object):  # pylint: disable=R0903
   ''' Represents an annotation. '''

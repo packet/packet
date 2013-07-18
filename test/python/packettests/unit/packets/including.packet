@@ -3,7 +3,8 @@ include <simple.packet>;
 
 enum TestEnum {
   ITEM1 = 2,
-  ITEM2 = 0x1
+  ITEM2 = 0x1,
+  ITEM3 = 0x10
 }
 
 @type_selector(c=TestEnum.ITEM1)
@@ -14,6 +15,11 @@ packet Including(simple.SimpleParent) {
 @type_selector(c=TestEnum.ITEM2)
 packet AnotherIncluding(simple.SimpleParent) {
   @repeated(size=2) uint8 arr;
+}
+
+@type_selector(c=TestEnum.ITEM3)
+packet YetAnotherIncluding(simple.SimpleParent) {
+  simple.SimpleParent single_s;  # Some comments.
 }
 
 @bigendian

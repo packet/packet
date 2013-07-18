@@ -117,10 +117,10 @@ class EndianAnnotation(PacketLevelAnnotation):
 
 @field_level_annotation('size')  # pylint: disable=R0903
 class SizeAnnotation(FieldLevelAnnotation):
-  ''' The size annotation is used for the field storing the size of its
-      packet or another field. In the latter case, user need to pass the field
-      name as the parameter (e.g., @size(field)). We set size_field in the
-      respective packet/field.
+  ''' @size is used for a field storing a packet's size or the size of another
+      repreated field in bytes. In the latter case, user need to pass the field
+      name as the parameter (e.g., @size(field)). Packet runtime automatically
+      sets size in the respective packet/field.
       Note: size cannot be overriden in the child classes. '''
   def __init__(self, field, model):
     FieldLevelAnnotation.__init__(self, field, model)
@@ -129,7 +129,25 @@ class SizeAnnotation(FieldLevelAnnotation):
     if len(model.params) == 1:
       # TODO(soheil): We need to make sure that the field is a vector
       referencing_field = field.packet.find_field(model.params[0].name)
-      referencing_field.repeated_info = (True, field)
+      referencing_field.set_repeated_info(size_field=field)
+    else:
+      field.packet.size_info = (True, field)
+
+@field_level_annotation('count')  # pylint: disable=R0903
+class CountAnnotation(FieldLevelAnnotation):
+  ''' @count is used for a field storing the number of items in another
+      repreated field. In the latter case, user need to pass the field
+      name as the parameter (e.g., @count(field)). Packet runtime automatically
+      sets count in the respective field.
+      Note: count cannot be overriden in the child classes. '''
+  def __init__(self, field, model):
+    FieldLevelAnnotation.__init__(self, field, model)
+    assert len(model.params) <= 1, \
+        '@count can have at most one parameter: %s' % field.name
+    if len(model.params) == 1:
+      # TODO(soheil): We need to make sure that the field is a vector
+      referencing_field = field.packet.find_field(model.params[0].name)
+      referencing_field.set_repeated_info(count_field=field)
     else:
       field.packet.size_info = (True, field)
 
@@ -139,10 +157,19 @@ class RepeatedAnnotation(FieldLevelAnnotation):
       must have another field annotated with size accordingly.'''
   def __init__(self, field, model):
     FieldLevelAnnotation.__init__(self, field, model)
-    if len(model.params) == 1:
-      assert model.params[0].name == 'size', \
-          '@repeated only accepts "size" as its parameter: %s' % field.name
-      field.repeated_info = (False, int(model.params[0].value))
-    else:
-      field.repeated_info = (True, None)
+
+    if field.repeated_info:
+      # This field had a @size field.
+      assert len(model.params) == 0, \
+          'Repeated field %s already has a size or count field.' % field.name
+      return
+
+    if len(model.params) == 0:
+      field.set_repeated_info()
+      return
+
+    assert model.params[0].name == 'count', \
+        '@repeated only accepts "count" as its parameter: %s' % field.name
+
+    field.set_repeated_info(count=model.params[0].value)
 
