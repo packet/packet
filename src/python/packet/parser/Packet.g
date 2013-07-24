@@ -41,7 +41,7 @@ tokens {
 
 @header {
 #
-# Copyright (c) 2012, The Packet project authors. All rights reserved.
+# Copyright (c) 2012-2013, The Packet project authors. All rights reserved.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -108,14 +108,28 @@ enum: enum_def LBRAC enum_body RBRAC -> ^(ENUM enum_def enum_body?);
 
 enum_def: 'enum' enum_name -> enum_name;
 
-enum_body: (enum_item COMMA!)* enum_item?;
+enum_body: enum_item (COMMA! enum_item)*;
 
 enum_item: enum_item_name EQ enum_item_value ->
     ^(ENUM_ITEM enum_item_name enum_item_value);
 
 enum_item_name: IDENTIFIER;
 
-enum_item_value: NUMBER;
+enum_item_value: math_expr;
+
+math_expr: multiply_expr (
+    PLUS^ multiply_expr|
+    DASH^ multiply_expr)*;
+
+multiply_expr: primary_expr (
+    MULTIPLY^ primary_expr |
+    SLASH^ primary_expr |
+    SHIFT_RIGHT^ primary_expr |
+    SHIFT_LEFT^ primary_expr)*;
+
+primary_expr: NUMBER |
+    enumeration_reference |
+    LEFT_PRANTHESIS math_expr RIGHT_PRANTHESIS -> ^(math_expr);
 
 packet: packet_def LBRAC packet_body RBRAC -> ^(PACKET packet_def packet_body?);
 
@@ -202,6 +216,14 @@ EQ: '=';
 
 NUMBER: ( DASH? ( DIGIT+ (DOT DIGIT+)? ) ) |
     ( '0x' ( DIGIT | 'A'..'F' | 'a'..'f' )+ );
+
+MULTIPLY: '*';
+
+SHIFT_LEFT: '<<';
+
+SHIFT_RIGHT: '>>';
+
+PLUS: '+';
 
 LITERAL: QOUTATION LITERAL_PART+ QOUTATION;
 

@@ -172,6 +172,8 @@ class RepeatedAnnotation(FieldLevelAnnotation):
 
     assert model.params[0].name == 'count', \
         '@repeated only accepts "count" as its parameter: %s' % field.name
+    assert model.params[0].value != None, \
+        'count in @repeated is None: %s.%s' % (field.packet.name, field.name)
 
-    field.set_repeated_info(count=model.params[0].value)
+    field.set_repeated_info(count=int(model.params[0].value))
 

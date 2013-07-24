@@ -122,8 +122,8 @@ class SizeProcessor(ModelProcessor):
       if packet.parent:
         assert packet.get_size_field() == packet.parent.get_size_field(), \
                'Dervied packet cannot override size field: %s.%s vs %s.%s' % \
-               (packet.name, packet.get_size_field(), packet.parent.name,
-                packet.parent.get_size_field())
+               (packet.name, packet.get_size_field().name, packet.parent.name,
+                packet.parent.get_size_field().name)
       return
 
     if self._is_fixed_size(packet):

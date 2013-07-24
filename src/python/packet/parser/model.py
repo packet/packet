@@ -370,6 +370,8 @@ class AnnotationParam(object):  # pylint: disable=R0903
       self.value = None
     elif len(value) > 1:
       item = self.__find_enum_item('.'.join(value[-3:-1]), value[-1])
+      if not item:
+        LOG.warn('Enumeration not found: %s' % value)
       self.value = item.value if item else None
     elif value[0].startswith('"') or value[0].startswith('\''):
       self.value = value[0][1:-1]
