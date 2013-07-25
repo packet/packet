@@ -84,13 +84,17 @@ class _PythonicWrapper(object):  # pylint: disable=R0903
     if name == 'values':
       return self.__values()
 
-    is_list = name.endswith('_list')
+    if name == 'text':
+      return self._obj.text
+
+    is_all_children = name == 'children'
+    is_list = name.endswith('_list') or is_all_children
     if is_list:
       name = name[:-5]
 
     children = []
     for child in self._obj.getChildren():
-      if child.text.lower() == name.lower():
+      if child.text.lower() == name.lower() or is_all_children:
         wrapped_child = _PythonicWrapper(child)
         if not is_list:
           return wrapped_child
@@ -192,14 +196,65 @@ class Enum(object):  # pylint: disable=R0903
       item_obj = EnumItem(self, item)
       self.items[item_obj.name] = item_obj
 
+def get_binary_operator(opt):  #pylint: disable=R0911
+  ''' Retuns the closure for the given binary operator  '''
+  def add(lhs, rhs):
+    ''' add. '''
+    return lhs + rhs
+
+  def sub(lhs, rhs):
+    ''' Subtract.'''
+    return lhs - rhs
+
+  def mul(lhs, rhs):
+    ''' Multiply. '''
+    return lhs * rhs
+
+  def div(lhs, rhs):
+    ''' Devide. '''
+    return lhs / rhs
+
+  def rshift(lhs, rhs):
+    ''' Right shift. '''
+    return lhs >> rhs
+
+  def lshift(lhs, rhs):
+    ''' Left shift. '''
+    return lhs << rhs
+
+  if opt == '+':
+    return add
+  if opt == '-':
+    return sub
+  if opt == '*':
+    return mul
+  if opt == '/':
+    return div
+  if opt == '<<':
+    return lshift
+  if opt == '>>':
+    return rshift
+  return None
+
 class EnumItem(object):  # pylint: disable=R0903
   ''' Represents an enum item. '''
   def __init__(self, enum, enum_item):
     ''' @param enum: The container enum.
         @param enum_item: The parsed enum item structure. '''
     self.name = enum_item.values[0]
-    self.value = enum_item.values[1]
+    self.value = self.__evaluate_value(enum_item.children[1])
     self.enum = enum
+
+  def __evaluate_value(self, enum_item):
+    ''' Evaluates a math exmpression in the num_item '''
+    if not enum_item.children:
+      return int(enum_item.text, 0)
+
+    children_values = [self.__evaluate_value(child)
+                       for child in enum_item.children]
+
+    return get_binary_operator(enum_item.text)(children_values[0],
+                                               children_values[1])
 
 # TODO(soheil): Maybe extend as Type.
 class Packet(object):  # pylint: disable=R0902,R0903
@@ -245,11 +300,11 @@ class Packet(object):  # pylint: disable=R0902,R0903
 
   def get_fixed_size(self):
     ''' Returns the fixed size. '''
-    return self.size_info[1] if not self.size_info[0] else None
+    return self.size_info[1] if self.is_fixed_size() else None
 
   def get_size_field(self):
     ''' Returns the size field if the packet has a variable length. '''
-    return self.size_info[1] if not self.get_fixed_size() else None
+    return self.size_info[1] if not self.is_fixed_size() else None
 
   def is_fixed_size(self):
     ''' Returns whether the packet is fixed in size. '''
