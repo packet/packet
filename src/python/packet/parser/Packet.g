@@ -124,12 +124,12 @@ math_expr: multiply_expr (
 multiply_expr: primary_expr (
     MULTIPLY^ primary_expr |
     SLASH^ primary_expr |
-    SHIFT_RIGHT^ primary_expr |
-    SHIFT_LEFT^ primary_expr)*;
+    RIGHT_SHIFT^ primary_expr |
+    LEFT_SHIFT^ primary_expr)*;
 
 primary_expr: NUMBER |
     enumeration_reference |
-    LEFT_PRANTHESIS math_expr RIGHT_PRANTHESIS -> ^(math_expr);
+    LEFT_PRANTHESIS! math_expr RIGHT_PRANTHESIS!;
 
 packet: packet_def LBRAC packet_body RBRAC -> ^(PACKET packet_def packet_body?);
 
@@ -219,9 +219,9 @@ NUMBER: ( DASH? ( DIGIT+ (DOT DIGIT+)? ) ) |
 
 MULTIPLY: '*';
 
-SHIFT_LEFT: '<<';
+LEFT_SHIFT: '<<';
 
-SHIFT_RIGHT: '>>';
+RIGHT_SHIFT: '>>';
 
 PLUS: '+';
 
