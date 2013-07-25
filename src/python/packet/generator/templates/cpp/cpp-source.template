@@ -26,8 +26,11 @@ ${self.include(pom.namespace)}
   cpp_parent_class = self.get_parent(packet)
 %>\
 
-${cpp_class_name}::${self.iovector_constructor_prototype(packet)}
+${cpp_class_name}::${self.lvalue_iovector_constructor_prototype(packet)}
     : ${cpp_parent_class}(io_vector) {}
+
+${cpp_class_name}::${self.rvalue_iovector_constructor_prototype(packet)}
+    : ${cpp_parent_class}(std::move(io_vector)) {}
 
 ${cpp_class_name}::${self.size_constructor_prototype(packet)}
     : ${cpp_class_name}(cyrus::io::IoVector(size)) {

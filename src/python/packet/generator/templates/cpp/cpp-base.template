@@ -68,8 +68,14 @@ ${self.body()}
 #include "${include_prefix + namespace}.h"\
 </%def>
 
-<%def name="iovector_constructor_prototype(packet)" buffered="True" filter="trim">
+<%def name="lvalue_iovector_constructor_prototype(packet)" buffered="True"
+    filter="trim">
   ${self.class_name(packet)}(const cyrus::io::IoVector& io_vector)
+</%def>
+
+<%def name="rvalue_iovector_constructor_prototype(packet)" buffered="True"
+    filter="trim">
+  ${self.class_name(packet)}(cyrus::io::IoVector&& io_vector)
 </%def>
 
 <%def name="size_constructor_prototype(packet, default_size=None)" buffered="True"
