@@ -39,7 +39,7 @@ class PacketGenerator(object):
       extend this class. '''
   __metaclass__ = ABCMeta
   def __init__(self):
-    self._pipeline = [OffsetProcessor(), SizeProcessor(), EndianProcessor()]
+    self._pipeline = [SizeProcessor(), OffsetProcessor(), EndianProcessor()]
 
   def _is_recursvie(self, opts):  # pylint: disable=R0201
     ''' Whether the option enforces recursive generation. '''

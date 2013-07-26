@@ -138,6 +138,7 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     for enum in tree.enum_list:
       enum_obj = Enum(self, enum)
       self.enums[enum_obj.name] = enum_obj
+      enum_obj.load_items(enum)
 
   def __load_packets(self, tree):
     ''' Loads the packets from the tree. '''
@@ -166,6 +167,16 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     the_type = self.find_type(name)
     return the_type if isinstance(the_type, Enum) else None
 
+  def find_enum_item(self, enum_ref):
+    ''' Finds the enum item value. '''
+    enum_reference = [child.text for child in enum_ref.children]
+    enum_name = '.'.join(enum_reference[-3:-1])
+    enum = self.find_enum(enum_name)
+    if not enum:
+      LOG.warn('Enum not found %s' % enum_name)
+      return None
+    return enum.items.get(enum_reference[-1])
+
   def find_type(self, name):
     ''' Finds a type.
         @param name: qualified type name. '''
@@ -192,6 +203,10 @@ class Enum(object):  # pylint: disable=R0903
     self.name = enum.values[0]
     self.pom = pom
     self.items = OrderedDict()
+
+  def load_items(self, enum):
+    ''' Loads enum items. Note: Do not call this method in the constructor,
+        as it causes problems for self referencing enums. '''
     for item in enum.enum_item_list:
       item_obj = EnumItem(self, item)
       self.items[item_obj.name] = item_obj
@@ -241,14 +256,21 @@ class EnumItem(object):  # pylint: disable=R0903
   def __init__(self, enum, enum_item):
     ''' @param enum: The container enum.
         @param enum_item: The parsed enum item structure. '''
+    self.enum = enum
     self.name = enum_item.values[0]
     self.value = self.__evaluate_value(enum_item.children[1])
-    self.enum = enum
 
   def __evaluate_value(self, enum_item):
     ''' Evaluates a math exmpression in the num_item '''
     if not enum_item.children:
       return int(enum_item.text, 0)
+
+    if enum_item.enum_ref_list:
+      item = self.enum.pom.find_enum_item(enum_item.enum_ref_list[0])
+      assert item, \
+          'Enum not found in value of %s' % self.name
+      return item.value
+
 
     children_values = [self.__evaluate_value(child)
                        for child in enum_item.children]
@@ -413,22 +435,24 @@ class Annotation(object):  # pylint: disable=R0903
     self.packet = pkt
     self.params = []
     for param in annotation.annotation_param_list:
-      self.params.append(AnnotationParam(self, param.values[0],
-                                         param.values[1:]))
+      self.params.append(AnnotationParam(self, param))
 
 class AnnotationParam(object):  # pylint: disable=R0903
   ''' Represents and annotation param. '''
-  def __init__(self, annotation, name, value):
+  def __init__(self, annotation, param):
     self.annotation = annotation
-    self.name = name
-    if len(value) == 0:
+    self.name = param.values[0]
+    if len(param.values) == 1:
       self.value = None
-    elif len(value) > 1:
-      item = self.__find_enum_item('.'.join(value[-3:-1]), value[-1])
-      if not item:
-        LOG.warn('Enumeration not found: %s' % value)
+      return
+
+    if param.enum_ref_list:
+      item = self.annotation.packet.pom.find_enum_item(param.enum_ref_list[0])
       self.value = item.value if item else None
-    elif value[0].startswith('"') or value[0].startswith('\''):
+      return
+
+    value = param.values[1]
+    if value[0].startswith('"') or value[0].startswith('\''):
       self.value = value[0][1:-1]
     elif value[0].startswith('0x'):
       self.value = int(value[0], 16)
@@ -436,14 +460,4 @@ class AnnotationParam(object):  # pylint: disable=R0903
       self.value = float(value[0])
     else:
       self.value = int(value[0])
-
-
-  def __find_enum_item(self, enum_name, item_name):
-    ''' Finds an enum item.
-        @param enum_name: Enumeration qualified name.
-        @param item_name: Enumeration item name. '''
-    enum = self.annotation.packet.pom.find_enum(enum_name)
-    if not enum:
-      return None
-    return enum.items.get(item_name)
 

@@ -56,7 +56,9 @@ class OffsetProcessor(ModelProcessor):
 
     for field in packet.fields:
       if isinstance(field.type, BuiltInType):
-        offset_constant = offset_constant + field.type.length_in_bytes
+        offset_constant += field.type.length_in_bytes
+      elif field.type.is_fixed_size():
+        offset_constant += field.type.get_fixed_size()
       else:
         intermediate_fields.append(field)
     return (offset_constant, intermediate_fields)
@@ -71,7 +73,10 @@ class OffsetProcessor(ModelProcessor):
       field.offset = (offset_constant, list(intermediate_fields))
       if isinstance(field.type, BuiltInType):
         offset_constant = offset_constant + field.type.length_in_bytes
+      elif field.type.is_fixed_size():
+        offset_constant += field.type.get_fixed_size()
       else:
+        print field.type.name, 'is not fixed.', field.type.size_info
         intermediate_fields.append(field)
 
 class SizeProcessor(ModelProcessor):

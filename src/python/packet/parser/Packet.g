@@ -29,6 +29,7 @@ tokens {
   ANNOTATION_PARAM;
   ENUM;
   ENUM_ITEM;
+  ENUM_REF;
   EXTENDS;
   FIELD;
   FIELD_TYPE;
@@ -168,7 +169,10 @@ name: IDENTIFIER;
 
 annotation_value: literal | NUMBER | enumeration_reference;
 
-enumeration_reference: (IDENTIFIER DOT!)? IDENTIFIER DOT! IDENTIFIER;
+enumeration_reference:
+    IDENTIFIER DOT IDENTIFIER DOT IDENTIFIER ->
+        ^(ENUM_REF IDENTIFIER? IDENTIFIER IDENTIFIER) |
+    IDENTIFIER DOT IDENTIFIER -> ^(ENUM_REF IDENTIFIER IDENTIFIER);
 
 literal: LITERAL;
 
