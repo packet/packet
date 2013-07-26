@@ -178,39 +178,9 @@ ${self.static_size_prototype(packet, qualified=True)} {
 namespace cyrus {
 namespace concurrency {
 
-using cyrus::concurrency::internal::do_emit_message;
 using cyrus::concurrency::internal::Context;
 using cyrus::concurrency::internal::MessageSerializer;
 using cyrus::concurrency::internal::PacketSerializer;
-
-template <>
-bool emit_message(const ${cpp_class_name}& msg,
-    const std::shared_ptr<Context>& context) {
-  % for p in packet.children:
-  if (${self.type_selector_cond(p, 'msg')}) {
-    auto casted_msg = dynamic_cast<const ${
-        self.class_name(p, qualified=True)}*>(&msg);
-    return do_emit_message<${self.class_name(p, qualified=True)}>(*casted_msg,
-        context, nullptr);
-  }
-  % endfor
-  return do_emit_message(msg, context, nullptr);
-}
-
-template <typename ActorType>
-bool emit_message(const ${cpp_class_name}& msg,
-    const std::shared_ptr<Context>& context,
-    const std::shared_ptr<ActorType>& actor) {
-  % for p in packet.children:
-  if (${self.type_selector_cond(p, 'msg')}) {
-    auto casted_msg = dynamic_cast<const ${
-        self.class_name(p, qualified=True)}*>(&msg);
-    return do_emit_message<${self.class_name(p, qualified=True)}>(*casted_msg,
-        context, actor);
-  }
-  % endfor
-  return do_emit_message(msg, context, actor);
-}
 
 namespace internal {
 
@@ -243,20 +213,4 @@ template<>
 % endfor
 
 </%block>
-
-
-<%def name="type_selector_cond(packet, var_name=None, is_pointer=False)" buffered="True" filter="trim">
-  <%
-    conditions = packet.get_type_selector_condition()
-    assert conditions, 'Type selector cannot be empty for %s' % packet.name
-  %>
-  % for field, value in conditions:
-    % if not var_name:
-  ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value} &&
-    % else:
-  ${var_name}${'->' if is_pointer else '.'}${self.getter_name(field)}() == ${value} &&
-    % endif
-  % endfor
-  true
-</%def>
 

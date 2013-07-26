@@ -38,6 +38,10 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   ${self.lvalue_iovector_constructor_prototype(packet)};
   ${self.rvalue_iovector_constructor_prototype(packet)};
   ${self.size_constructor_prototype(packet, packet.min_size)};
+
+  ${self.copy_constructor_prototype(packet)} = default;
+  ${self.move_constructor_prototype(packet)} = default;
+
   virtual ~${cpp_class_name}();
 
   ${self.init_method_decl(packet)}
@@ -110,19 +114,50 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 </%def>\
 
 <%block name="footer">
+% for name, packet in pom.packets.iteritems():
+% for p in packet.children:
+${self.namespace_open(p.pom)}
+class ${self.class_name(p)};
+${self.namespace_close(p.pom)}
+% endfor
+% endfor
+
 namespace cyrus {
 namespace concurrency {
 namespace internal {
+
 % for name, packet in pom.packets.iteritems():
 <%
   cpp_class_name = self.class_name(packet, qualified=True)
 %>\
+
+template <typename Actor>
+struct emit_message_functor<${cpp_class_name}, Actor> {
+  bool operator()(const ${cpp_class_name}& data,
+      const std::shared_ptr<Context>& context,
+      const std::shared_ptr<Actor>& actor) {
+    % for p in packet.children:
+    if (${self.type_selector_cond(p, 'data')}) {
+      auto casted_data = dynamic_cast<const ${
+          self.class_name(p, qualified=True)}*>(&data);
+      return
+          emit_message_functor<${self.class_name(p, qualified=True)}, Actor>()(
+              *casted_data, context, actor) |
+          ## This is an optimization for polymorphic messages.
+          do_emit_message(data, context, actor);
+    }
+    % endfor
+    return do_emit_message(data, context, actor);
+  }
+};
+
 
 template <>
 MessageSerializer* get_default_serializer<${cpp_class_name}>(
     SerializationManager* manager);
 
 % endfor
+
 }  // namespace internal
 }  // namespace concurrency
 }  // namespace cyrus

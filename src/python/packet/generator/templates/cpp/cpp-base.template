@@ -11,16 +11,24 @@
 </%block>\
 
 <%block name="ns_openning">\
-namespace ${self.namespace_name(pom)} {\
+    ${self.namespace_open(pom)}
 </%block>\
 
 ${self.body()}
 
 <%block name="ns_closing">\
-}  // namespace ${self.namespace_name(pom)}\
+    ${self.namespace_close(pom)}
 </%block>
 
 <%block name="footer" />
+
+<%def name="namespace_open(pom)" buffered="True" filter="trim">
+namespace ${self.namespace_name(pom)} {\
+</%def>
+
+<%def name="namespace_close(pom)" buffered="True" filter="trim">
+}  // namespace ${self.namespace_name(pom)}\
+</%def>
 
 <%def name="namespace_name(pom)" buffered="True" filter="trim">
   ${pom.namespace}
@@ -78,10 +86,18 @@ ${self.body()}
   ${self.class_name(packet)}(cyrus::io::IoVector&& io_vector)
 </%def>
 
-<%def name="size_constructor_prototype(packet, default_size=None)" buffered="True"
-    filter="trim">
+<%def name="size_constructor_prototype(packet, default_size=None)"
+    buffered="True" filter="trim">
   ${self.class_name(packet)}(size_t size ${
       '= ' + str(packet.min_size) if default_size else ''})
+</%def>
+
+<%def name="copy_constructor_prototype(packet)" buffered="True" filter="trim">
+  ${self.class_name(packet)}(const ${self.class_name(packet)}&)
+</%def>
+
+<%def name="move_constructor_prototype(packet)" buffered="True" filter="trim">
+  ${self.class_name(packet)}(${self.class_name(packet)}&&)
 </%def>
 
 <%def name="method_prototype(const=False, qualified=False, static=False)"
@@ -296,5 +312,20 @@ ${self.body()}
     <%def name="args()" filter="trim">
     </%def>
   </%self:method_prototype>
+</%def>
+
+<%def name="type_selector_cond(packet, var_name=None, is_pointer=False)" buffered="True" filter="trim">
+  <%
+    conditions = packet.get_type_selector_condition()
+    assert conditions, 'Type selector cannot be empty for %s' % packet.name
+  %>
+  % for field, value in conditions:
+    % if not var_name:
+  ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value} &&
+    % else:
+  ${var_name}${'->' if is_pointer else '.'}${self.getter_name(field)}() == ${value} &&
+    % endif
+  % endfor
+  true
 </%def>
 

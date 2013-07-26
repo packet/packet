@@ -76,7 +76,6 @@ class OffsetProcessor(ModelProcessor):
       elif field.type.is_fixed_size():
         offset_constant += field.type.get_fixed_size()
       else:
-        print field.type.name, 'is not fixed.', field.type.size_info
         intermediate_fields.append(field)
 
 class SizeProcessor(ModelProcessor):
