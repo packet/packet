@@ -63,6 +63,7 @@ namespace ${self.namespace_name(pom)} {\
 
 <%def name="common_include()" buffered="True" filter="trim">
 #include <array>
+#include <limits>
 #include <memory>
 #include <vector>
 #include <utility>
