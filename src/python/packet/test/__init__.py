@@ -19,3 +19,10 @@
 ''' Packet unit tests. '''
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
+
+import os.path
+
+def get_packet_repo_path():
+  ''' Get packet repository path. '''
+  return os.path.join(os.path.dirname(__file__), 'packets')
+

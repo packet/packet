@@ -7,17 +7,17 @@ enum TestEnum {
   ITEM3 = 0x10
 }
 
-@type_selector(c=TestEnum.ITEM1)
+@type_selector(c = TestEnum.ITEM1)
 packet Including(simple.SimpleParent) {
   @repeated simple.Simple s;  # Some comments.
 }
 
-@type_selector(c=TestEnum.ITEM2)
+@type_selector(c = TestEnum.ITEM2)
 packet AnotherIncluding(simple.SimpleParent) {
-  @repeated(size=2) uint8 arr;
+  @repeated(count = 2) uint8 arr;
 }
 
-@type_selector(c=TestEnum.ITEM3)
+@type_selector(c = TestEnum.ITEM3)
 packet YetAnotherIncluding(simple.SimpleParent) {
   simple.SimpleParent single_s;  # Some comments.
 }
@@ -27,7 +27,7 @@ packet BigEndianPacket {
   uint16 a;
 }
 
-@type_selector(a=1)
+@type_selector(a = 1)
 packet DerivedBigEndian(BigEndianPacket) {
   uint16 b;
   uint32 c;
