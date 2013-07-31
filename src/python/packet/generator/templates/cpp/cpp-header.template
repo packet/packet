@@ -123,13 +123,22 @@ ${self.namespace_close(p.pom)}
 % endfor
 
 namespace cyrus {
-namespace concurrency {
-namespace internal {
 
 % for name, packet in pom.packets.iteritems():
 <%
   cpp_class_name = self.class_name(packet, qualified=True)
 %>\
+
+namespace io {
+
+template<>
+std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const
+    cyrus::io::IoVector& io_vec);
+
+}  // namespace io
+
+namespace concurrency {
+namespace internal {
 
 template <typename Actor>
 struct emit_message_functor<${cpp_class_name}, Actor> {
@@ -151,15 +160,14 @@ struct emit_message_functor<${cpp_class_name}, Actor> {
   }
 };
 
-
 template <>
 MessageSerializer* get_default_serializer<${cpp_class_name}>(
     SerializationManager* manager);
 
-% endfor
-
 }  // namespace internal
 }  // namespace concurrency
+
+% endfor
 }  // namespace cyrus
 
 #endif  // ${self.header_macro()}

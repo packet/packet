@@ -206,7 +206,7 @@ namespace cyrus {
 namespace io {
 
 template<>
-::std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const ::cyrus::io::IoVector& io_vec) {
+std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const cyrus::io::IoVector& io_vec) {
   % for p in packet.children:
   if (${self.type_selector_cond(p)}) {
     return make_packet<${self.class_name(p, qualified=True)}>(io_vec);
