@@ -18,16 +18,20 @@
 #
 
 {
-#  'includes': [
-#    '../src/python/py-commons.gypi',
-#  ],
   'targets': [
     {
       'target_name': 'packet_compile_spec',
       'type': 'none',
       'dependencies': [
-        '../src/python/packet/parser/parser.gyp:packet_generate_parser',
+        'src/python/packet/parser/parser.gyp:packet_generate_parser',
       ]
+    },
+    {
+      'target_name': 'cpp',
+      'type': 'none',
+      'dependencies': [
+        'src/cpp/packet/packet.gyp:packet',
+      ],
     },
   ]
 }

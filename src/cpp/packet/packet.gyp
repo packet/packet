@@ -1,5 +1,4 @@
-#
-# Copyright (C) 2012, The Packet project authors.
+# Copyright (C) 2013, The Cyrus project authors.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,37 +17,22 @@
 #
 
 {
-  'variables': {
-    'packet_parser_input': 'Packet.g',
-    'tools_home': '../../../../tools',
-    'antlr_home': '<@(tools_home)/antlr',
-  },
   'targets': [
     {
-      'target_name': 'packet_generate_parser',
-      'type': 'none',
-      'dependencies': [],
-      'actions': [
-        {
-          'action_name': 'packet_antlr',
-          'inputs': [
-            '<(packet_parser_input)',
-          ],
-          'outputs': [
-            'PacketLexer.py',
-            'PacketParser.py'
-          ],
-          'action': [
-            'java',
-            '-cp',
-            '<(antlr_home)/antlr.jar',
-            'org.antlr.Tool',
-            '<(packet_parser_input)',
-          ]
-        },
-      ]
+      'target_name': 'packet',
+      'type': '<(library)',
+      'dependencies': [
+        '<(libuv_dir)/uv.gyp:libuv',
+        '<(particle_dir)/particle.gyp:particle',
+      ],
+      'conditions': [
+        ['OS=="linux"', {
+          'link_settings': {
+            'libraries': [ '-ldl', '-lrt' ],
+          },
+        }],
+      ],
     },
-  ]
+  ],
 }
-
 

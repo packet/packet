@@ -68,7 +68,6 @@ for f in $staged_files; do
   fi
 done
 
-
 if [ -n $staged_python_files ]; then
   staged_python_files=$(git diff --cached --name-only $against | grep py$)
 
@@ -78,4 +77,6 @@ if [ -n $staged_python_files ]; then
     pylint -i y ${staged_python_files[*]}
   fi
 fi
+
+tools/presubmit/cpplint.py ${staged_files[*]}
 

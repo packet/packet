@@ -1,7 +1,5 @@
 # Gyp output.
-build/*
-!build/packet.gyp
-!build/pre-commit
+out
 
 # GNU Make.
 *Makefile*
@@ -52,4 +50,9 @@ nosetests.xml
 # Eclipse
 .project
 .pydev*
+.cproject
+.settings
+
+# Mac OS.
+.AppleDouble
 
