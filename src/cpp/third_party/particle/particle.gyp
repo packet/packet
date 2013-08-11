@@ -55,7 +55,10 @@
       'target_name': 'particle_testrunner',
       'type': 'static_library',
       'dependencies': [
-        '<(particle_cpp_src_dir)/third_party/gtest.gyp:gtest_main',
+        'particle_testlib',
+      ],
+      'sources': [
+        '<(particle_cpp_src_dir)/third_party/gtest/src/gtest_main.cc',
       ],
     },
     {
