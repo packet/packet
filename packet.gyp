@@ -31,6 +31,7 @@
       'type': 'none',
       'dependencies': [
         'src/cpp/packet/packet.gyp:packet',
+        'src/cpp/packet/packet.gyp:packet_unittests',
       ],
     },
   ]

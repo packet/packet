@@ -33,6 +33,18 @@
         }],
       ],
     },
+    {
+      'target_name': 'packet_unittests',
+      'type': 'executable',
+      'dependencies': [
+        'packet',
+        '<(particle_dir)/particle.gyp:particle_testlib',
+        '<(particle_dir)/particle.gyp:particle_testrunner',
+      ],
+      'sources': [
+        'internal/vector_test.cc',
+      ],
+    },
   ],
 }
 
