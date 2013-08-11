@@ -45,7 +45,7 @@
     },
     {
       'target_name': 'particle_testlib',
-      'type': 'none',
+      'type': '<(library)',
       'dependencies': [
         '<(particle_cpp_src_dir)/third_party/gmock.gyp:gmock',
         '<(particle_cpp_src_dir)/third_party/gtest.gyp:gtest',
@@ -53,7 +53,7 @@
     },
     {
       'target_name': 'particle_testrunner',
-      'type': 'none',
+      'type': 'static_library',
       'dependencies': [
         '<(particle_cpp_src_dir)/third_party/gtest.gyp:gtest_main',
       ],
