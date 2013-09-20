@@ -114,7 +114,7 @@ class RingBuffer final {
           next_free_index));
 
 
-    new (&buffer[masked(next_free_index)]) T(record);  // NOLINT
+    new (&buffer[masked(next_free_index)]) T(std::move(record));  // NOLINT
 
     // Loops until all prior writes are finished.
     size_t current_free_index_copy;

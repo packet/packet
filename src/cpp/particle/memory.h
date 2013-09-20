@@ -67,6 +67,18 @@ class SharedOnly : public std::enable_shared_from_this<T> {
 
 #define FRIEND_SHARED_ONLY(T) friend class particle::SharedOnly<T>
 
+/**
+ * Used for self referencing classes.
+ */
+template <typename T>
+class SelfReferencing {
+ public:
+  explicit SelfReferencing(const std::shared_ptr<T>& self) : self(self) {}
+
+ protected:
+  std::shared_ptr<T> self;
+};
+
 }  // namespace particle
 
 #endif  // CPP_PARTICLE_MEMORY_H_
