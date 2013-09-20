@@ -25,12 +25,24 @@
         '<(libuv_dir)/uv.gyp:libuv',
         '<(particle_dir)/particle.gyp:particle',
       ],
+      'export_dependent_settings': [
+        '<(libuv_dir)/uv.gyp:libuv',
+      ],
       'conditions': [
         ['OS=="linux"', {
           'link_settings': {
             'libraries': [ '-ldl', '-lrt' ],
           },
         }],
+      ],
+      'sources': [
+        'internal/channel.h',
+        'internal/vector.h',
+        'internal/vector.cc',
+        'channel.h',
+        'packet.h',
+        'vector.h',
+        'vector.cc',
       ],
     },
     {
@@ -43,6 +55,9 @@
       ],
       'sources': [
         'internal/vector_test.cc',
+        'channel_test.cc',
+        'packet_test.cc',
+        'vector_test.cc',
       ],
     },
   ],
