@@ -50,6 +50,7 @@ class Packet {
   Packet& operator=(Packet&&) = delete;
 
   virtual ~Packet() {}
+
   virtual size_t size() const {
     return vector.size();
   }

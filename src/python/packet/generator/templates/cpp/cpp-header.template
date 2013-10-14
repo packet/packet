@@ -72,6 +72,33 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 };
 
 % endfor
+<%block name="footer">
+% for name, packet in pom.packets.iteritems():
+% for p in packet.children:
+${self.namespace_open(p.pom)}
+class ${self.class_name(p)};
+${self.namespace_close(p.pom)}
+% endfor
+% endfor
+
+
+% for name, packet in pom.packets.iteritems():
+<%
+  cpp_class_name = self.class_name(packet, qualified=True)
+%>\
+
+namespace packet {
+
+template<>
+std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const
+    packet::IoVector& io_vec);
+
+}  // namespace packet
+
+% endfor
+
+#endif  // ${self.header_macro()}
+</%block>
 \
 <%def name="getter_decl(field)" buffered="True" filter="trim">
   ${self.getter_prototype(field)};
@@ -113,62 +140,3 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   ${self.init_method_prototype(packet)};
 </%def>\
 
-<%block name="footer">
-% for name, packet in pom.packets.iteritems():
-% for p in packet.children:
-${self.namespace_open(p.pom)}
-class ${self.class_name(p)};
-${self.namespace_close(p.pom)}
-% endfor
-% endfor
-
-namespace cyrus {
-
-% for name, packet in pom.packets.iteritems():
-<%
-  cpp_class_name = self.class_name(packet, qualified=True)
-%>\
-
-namespace io {
-
-template<>
-std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const
-    cyrus::io::IoVector& io_vec);
-
-}  // namespace io
-
-namespace concurrency {
-namespace internal {
-
-template <typename Actor>
-struct emit_message_functor<${cpp_class_name}, Actor> {
-  bool operator()(const ${cpp_class_name}& data,
-      const std::shared_ptr<Context>& context,
-      const std::shared_ptr<Actor>& actor) {
-    % for p in packet.children:
-    if (${self.type_selector_cond(p, 'data')}) {
-      auto casted_data = dynamic_cast<const ${
-          self.class_name(p, qualified=True)}*>(&data);
-      return
-          emit_message_functor<${self.class_name(p, qualified=True)}, Actor>()(
-              *casted_data, context, actor) |
-          ## This is an optimization for polymorphic messages.
-          do_emit_message(data, context, actor);
-    }
-    % endfor
-    return do_emit_message(data, context, actor);
-  }
-};
-
-template <>
-MessageSerializer* get_default_serializer<${cpp_class_name}>(
-    SerializationManager* manager);
-
-}  // namespace internal
-}  // namespace concurrency
-
-% endfor
-}  // namespace cyrus
-
-#endif  // ${self.header_macro()}
-</%block>

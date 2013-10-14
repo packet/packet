@@ -33,7 +33,7 @@ ${cpp_class_name}::${self.rvalue_iovector_constructor_prototype(packet)}
     : ${cpp_parent_class}(std::move(io_vector)) {}
 
 ${cpp_class_name}::${self.size_constructor_prototype(packet)}
-    : ${cpp_class_name}(cyrus::io::IoVector(size)) {
+    : ${cpp_class_name}(packet::make_io_vector(size)) {
   ${self.init_method_name(packet)}();
 }
 
@@ -183,30 +183,10 @@ ${self.static_size_prototype(packet, qualified=True)} {
   cpp_class_name = self.class_name(packet, qualified=True)
 %>\
 
-namespace cyrus {
-namespace concurrency {
-
-using cyrus::concurrency::internal::Context;
-using cyrus::concurrency::internal::MessageSerializer;
-using cyrus::concurrency::internal::PacketSerializer;
-
-namespace internal {
-
-template <>
-MessageSerializer* get_default_serializer<${cpp_class_name}>(
-    SerializationManager* manager) {
-  return new PacketSerializer<${cpp_class_name}>(manager);
-}
-
-}  // namespace internal
-}  // namespace concurrency
-}  // namespace cyrus
-
-namespace cyrus {
-namespace io {
+namespace packet {
 
 template<>
-std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const cyrus::io::IoVector& io_vec) {
+std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const packet::IoVector& io_vec) {
   % for p in packet.children:
   if (${self.type_selector_cond(p)}) {
     return make_packet<${self.class_name(p, qualified=True)}>(io_vec);
@@ -215,8 +195,7 @@ std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const cyrus::i
   return ::std::make_shared<${cpp_class_name}>(io_vec);
 }
 
-}  // namespace io
-}  // namespace cyrus
+}  // namespace packet
 
 % endfor
 

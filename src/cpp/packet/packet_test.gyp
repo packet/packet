@@ -1,5 +1,4 @@
-#
-# Copyright (C) 2012, The Packet project authors.
+# Copyright (C) 2013, The Cyrus project authors.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,20 +19,21 @@
 {
   'targets': [
     {
-      'target_name': 'packet_compile_spec',
-      'type': 'none',
+      'target_name': 'packet_unittests',
+      'type': 'executable',
       'dependencies': [
-        'src/python/packet/parser/parser.gyp:packet_generate_parser',
-      ]
-    },
-    {
-      'target_name': 'cpp',
-      'type': 'none',
-      'dependencies': [
-        'src/cpp/packet/packet.gyp:packet',
-        'src/cpp/packet/packet_test.gyp:packet_unittests',
+        'packet.gyp:packet',
+        '<(particle_dir)/particle.gyp:particle_testlib',
+        '<(particle_dir)/particle.gyp:particle_testrunner',
+        '<(packet_dir)/src/packet/test/test.gyp:test_packet',
+      ],
+      'sources': [
+        'internal/vector_test.cc',
+        'channel_test.cc',
+        'packet_test.cc',
+        'vector_test.cc',
       ],
     },
-  ]
+  ],
 }
 

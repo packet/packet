@@ -45,20 +45,20 @@ IoVector make_packet_iov(size_t sections) {
 }
 
 TEST(PacketTest, Size) {
-  auto const size = size_t(13);
-  auto io_vector = make_io_vector(size);
+  auto const k_vector_size = size_t(13);
+  auto io_vector = make_io_vector(k_vector_size);
 
-  EXPECT_EQ(size, io_vector.size());
+  EXPECT_EQ(k_vector_size, io_vector.size());
 }
 
 TEST(PacketFactoryTest, DefaultSize) {
-  auto const sections = size_t(13);
-  auto io_vector = make_packet_iov(sections);
+  auto const k_sections = size_t(13);
+  auto io_vector = make_packet_iov(k_sections);
 
   auto factory = make_packet_factory<Packet, uint8_t>(0, false);
   auto packets = factory.read_packets(io_vector, io_vector.size());
 
-  EXPECT_EQ(sections, packets.size());
+  EXPECT_EQ(k_sections, packets.size());
 }
 
 class TestPacket : public Packet {
@@ -71,13 +71,13 @@ class TestPacket : public Packet {
 };
 
 TEST(PacketFactoryTest, PacketSize) {
-  auto const sections = size_t(13);
-  auto io_vector = make_packet_iov(sections);
+  auto const k_sections = size_t(13);
+  auto io_vector = make_packet_iov(k_sections);
 
   auto factory = make_packet_factory<TestPacket>();
   auto packets = factory.read_packets(io_vector, io_vector.size());
 
-  EXPECT_EQ(sections, packets.size());
+  EXPECT_EQ(k_sections, packets.size());
 }
 
 }  // namespace packet

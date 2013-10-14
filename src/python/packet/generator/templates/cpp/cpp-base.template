@@ -11,13 +11,13 @@
 </%block>\
 
 <%block name="ns_openning">\
-    ${self.namespace_open(pom)}
+${self.namespace_open(pom)}
 </%block>\
 
 ${self.body()}
 
 <%block name="ns_closing">\
-    ${self.namespace_close(pom)}
+${self.namespace_close(pom)}
 </%block>
 
 <%block name="footer" />
@@ -57,7 +57,7 @@ namespace ${self.namespace_name(pom)} {\
 % if packet.parent:
   ${self.class_name(packet.parent, qualified=True)}
 % else:
-  cyrus::io::Packet
+  packet::Packet
 % endif
 </%def>
 
@@ -68,8 +68,8 @@ namespace ${self.namespace_name(pom)} {\
 #include <vector>
 #include <utility>
 
-#include "cyrus/iolib/io.h"
-#include "cyrus/concurrency/actor.h"
+#include "packet/packet.h"
+#include "packet/channel.h"
 </%def>
 
 <%def name="include(namespace, include_prefix='')" buffered="True"
@@ -79,12 +79,12 @@ namespace ${self.namespace_name(pom)} {\
 
 <%def name="lvalue_iovector_constructor_prototype(packet)" buffered="True"
     filter="trim">
-  ${self.class_name(packet)}(const cyrus::io::IoVector& io_vector)
+  ${self.class_name(packet)}(const packet::IoVector& io_vector)
 </%def>
 
 <%def name="rvalue_iovector_constructor_prototype(packet)" buffered="True"
     filter="trim">
-  ${self.class_name(packet)}(cyrus::io::IoVector&& io_vector)
+  ${self.class_name(packet)}(packet::IoVector&& io_vector)
 </%def>
 
 <%def name="size_constructor_prototype(packet, default_size=None)"
@@ -143,7 +143,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const cyrus::io::IoVector& io_vector
+      const packet::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -199,9 +199,9 @@ namespace ${self.namespace_name(pom)} {\
     <%def name="args()" filter="trim">
       % if field.has_fixed_size():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE,
-                       repeated_info=field.repeated_info)} ${field.name}, cyrus::io::IoVector& io_vector
+                       repeated_info=field.repeated_info)} ${field.name}, packet::IoVector& io_vector
       % else:
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, cyrus::io::IoVector& io_vector
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, packet::IoVector& io_vector
       % endif
     </%def>
   </%self:method_prototype>
@@ -224,7 +224,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const cyrus::io::IoVector& io_vector
+      const packet::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -246,7 +246,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const cyrus::io::IoVector& io_vector
+      const packet::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>
@@ -289,7 +289,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      const cyrus::io::IoVector& io_vector
+      const packet::IoVector& io_vector
     </%def>
   </%self:method_prototype>
 </%def>

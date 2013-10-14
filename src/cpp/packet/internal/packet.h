@@ -36,13 +36,13 @@ namespace internal {
 
 template <typename DataT>
 inline typename ::std::enable_if<std::is_base_of<Packet, DataT>::value,
-    size_t>::type get_data_size(const IoVector& vec) {
+    size_t>::type get_data_size(const packet::IoVector& vec) {
   return DataT::size_(vec);
 }
 
 template <typename DataT>
 inline typename ::std::enable_if<std::is_integral<DataT>::value, size_t>::type
-    get_data_size(const IoVector& vec) {
+    get_data_size(const packet::IoVector& vec) {
   return sizeof(DataT);
 }
 

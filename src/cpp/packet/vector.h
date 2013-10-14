@@ -226,7 +226,8 @@ class IoVector final {
   typename ::std::enable_if<particle::is_std_array<Data>::value, void>::type
   do_write_data(const Data& data, size_t offset = 0) {
     for (size_t i = 0; i < std::tuple_size<Data>::value; i++) {
-      do_write_data(data[i], offset + i * sizeof(typename Data::value_type));
+      do_write_data<typename Data::value_type, is_big_endian>(
+          data[i], offset + i * sizeof(typename Data::value_type));
     }
   }
 
@@ -250,7 +251,7 @@ class IoVector final {
       processor(new_vec, element_size);
       data_count--;
       data_size -= element_size;
-      new_vec.consume(element_size, false);
+      new_vec.consume(element_size);
     }
   }
 
