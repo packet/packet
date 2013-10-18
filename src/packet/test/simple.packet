@@ -1,0 +1,36 @@
+# Copyright (c) 2013, The Packet Project.
+packet Simple {
+  @size uint8 x;
+}
+
+packet SimpleParent {
+  char c;
+  @size uint8 l;
+}
+
+@type_selector(c = 1)
+packet AnotherSimple(SimpleParent) {
+  Simple y;
+}
+
+@type_selector(c = 3)
+packet YetAnotherSimple(SimpleParent) {
+  @count(simples) int8 s;
+  @repeated Simple simples;
+}
+
+@type_selector(c = 4)
+packet YetYetAnotherSimple(SimpleParent) {
+  @size(a) int8 s;
+  @repeated AnotherSimple a;
+}
+
+enum MathExpression {
+  EXPR1 = (1 << 3),
+  EXPR2 = ((8 << 0) + 1)
+}
+
+@type_selector(c = MathExpression.EXPR1)
+packet MathExpressionPacket(SimpleParent) {
+}
+
