@@ -293,7 +293,9 @@ inline IoVector make_io_vector(
 }
 
 inline IoVector make_io_vector(size_t size) {
-  return make_io_vector(packet::internal::make_shared_io_vector(size));
+  auto shared_io_vector = packet::internal::make_shared_io_vector(size);
+  std::memset(shared_io_vector->get_buf(0), 0, size);
+  return make_io_vector(shared_io_vector);
 }
 
 }  // namespace packet
