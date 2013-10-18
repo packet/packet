@@ -320,15 +320,15 @@ class Packet(object):  # pylint: disable=R0902,R0903
         return field
     return None
 
-  def get_fixed_size(self):
+  def get_const_size(self):
     ''' Returns the fixed size. '''
-    return self.size_info[1] if self.is_fixed_size() else None
+    return self.size_info[1] if self.is_const_size() else None
 
   def get_size_field(self):
     ''' Returns the size field if the packet has a variable length. '''
-    return self.size_info[1] if not self.is_fixed_size() else None
+    return self.size_info[1] if not self.is_const_size() else None
 
-  def is_fixed_size(self):
+  def is_const_size(self):
     ''' Returns whether the packet is fixed in size. '''
     return not self.size_info[0]
 
@@ -375,13 +375,13 @@ class Field(object):  # pylint: disable=R0903
         count). '''
     return self.repeated_info and self.repeated_info.has_implicit_size()
 
-  def is_fixed_size_repeated(self):
+  def is_const_size_repeated(self):
     ''' Whether the field has a fixed size. '''
     return self.repeated_info and self.repeated_info.count
 
-  def has_fixed_size(self):
+  def has_const_size(self):
     ''' Whether the field is fixed in size. '''
-    return not self.is_repeated() or self.is_fixed_size_repeated()
+    return not self.is_repeated() or self.is_const_size_repeated()
 
   def set_repeated_info(self, size_field=None, count_field=None, count=None):
     ''' Sets the repeat info of the field. '''

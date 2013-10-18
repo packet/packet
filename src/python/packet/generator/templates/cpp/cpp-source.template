@@ -40,7 +40,7 @@ ${cpp_class_name}::${self.size_constructor_prototype(packet)}
 ${cpp_class_name}::~${cpp_class_name}() {}
 
 ${self.init_method_prototype(packet, qualified=True)} {
-  % if not packet.is_fixed_size():
+  % if not packet.is_const_size():
   ${cpp_class_name}::${self.setter_name(packet.get_size_field())}(MIN_SIZE);
   % endif
   // Invariants.
@@ -61,7 +61,7 @@ ${self.getter_prototype(field, qualified=True)} {
 
 ${self.static_getter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
-  % if field.is_repeated() and not field.has_fixed_size():
+  % if field.is_repeated() and not field.has_const_size():
     % if field.get_size_field():
   auto size = ${cpp_class_name}::${self.static_getter_name(field.get_size_field())}(io_vector);
     % else:
@@ -89,7 +89,7 @@ ${self.setter_prototype(field, qualified=True)} {
 ${self.static_setter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
 
-  % if field.has_fixed_size():
+  % if field.has_const_size():
   io_vector.write_data<${cpp_type_name}, ${big_endian}>(${field.name}, offset);
   % else:
   offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
@@ -139,7 +139,7 @@ ${self.offset_prototype(field, qualified=True)} {
   return offset;
 }
 
-  % if not field.has_fixed_size():
+  % if not field.has_const_size():
 ${self.field_size_prototype(field, qualified=True)} {
     % if field.get_size_field():
   auto size = ${cpp_class_name}::${
@@ -167,8 +167,8 @@ ${self.size_prototype(packet, qualified=True)} {
 }
 
 ${self.static_size_prototype(packet, qualified=True)} {
-  % if packet.is_fixed_size():
-  return ${packet.get_fixed_size()};
+  % if packet.is_const_size():
+  return ${packet.get_const_size()};
   % else:
   return ${self.class_name(packet.get_size_field().packet)}::${
       self.static_getter_name(packet.get_size_field())}(io_vector);

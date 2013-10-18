@@ -149,7 +149,7 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="setter_name(field)" buffered="True" filter="trim">
-  % if field.has_fixed_size():
+  % if field.has_const_size():
   set_${field.name}
   % else:
   add_${field.name}
@@ -168,7 +168,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      % if field.has_fixed_size():
+      % if field.has_const_size():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE, repeated_info=field.repeated_info)} ${field.name}
       % else:
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
@@ -178,7 +178,7 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="static_setter_name(field)" buffered="True" filter="trim">
-  % if field.has_fixed_size():
+  % if field.has_const_size():
     set_${field.name}_
   % else:
     add_${field.name}_
@@ -197,7 +197,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      % if field.has_fixed_size():
+      % if field.has_const_size():
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE,
                        repeated_info=field.repeated_info)} ${field.name}, packet::IoVector& io_vector
       % else:

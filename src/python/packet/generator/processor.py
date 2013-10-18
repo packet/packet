@@ -57,8 +57,8 @@ class OffsetProcessor(ModelProcessor):
     for field in packet.fields:
       if isinstance(field.type, BuiltInType):
         offset_constant += field.type.length_in_bytes
-      elif field.type.is_fixed_size():
-        offset_constant += field.type.get_fixed_size()
+      elif field.type.is_const_size():
+        offset_constant += field.type.get_const_size()
       else:
         intermediate_fields.append(field)
     return (offset_constant, intermediate_fields)
@@ -73,8 +73,8 @@ class OffsetProcessor(ModelProcessor):
       field.offset = (offset_constant, list(intermediate_fields))
       if isinstance(field.type, BuiltInType):
         offset_constant = offset_constant + field.type.length_in_bytes
-      elif field.type.is_fixed_size():
-        offset_constant += field.type.get_fixed_size()
+      elif field.type.is_const_size():
+        offset_constant += field.type.get_const_size()
       else:
         intermediate_fields.append(field)
 
@@ -104,7 +104,7 @@ class SizeProcessor(ModelProcessor):
     min_size = self._calculate_min_size_in_packet(packet.parent)
     for field in packet.fields:
       # These fields are implicitly sized.
-      if not field.has_fixed_size():
+      if not field.has_const_size():
         continue
 
       size = field.type.length_in_bytes if isinstance(field.type, BuiltInType) \
@@ -130,7 +130,7 @@ class SizeProcessor(ModelProcessor):
                 packet.parent.get_size_field().name)
       return
 
-    if self._is_fixed_size(packet):
+    if self._is_const_size(packet):
       assert packet.min_size != 0, 'Packet size is zero: %s' % packet.name
       packet.size_info = (False, packet.min_size)
       return
@@ -140,13 +140,13 @@ class SizeProcessor(ModelProcessor):
 
     packet.size_info = (True, packet.parent.get_size_field())
 
-  def _is_fixed_size(self, packet):  # pylint: disable=R0201
+  def _is_const_size(self, packet):  # pylint: disable=R0201
     ''' Wether the packet is fixed in size. '''
-    if packet.parent and not packet.parent.get_fixed_size():
+    if packet.parent and not packet.parent.get_const_size():
       return False
 
     for field in packet.fields:
-      if not field.has_fixed_size():
+      if not field.has_const_size():
         return False
     return True
 
