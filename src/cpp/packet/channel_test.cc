@@ -26,6 +26,7 @@
  */
 
 #include <chrono>
+#include <memory>
 #include <thread>
 
 #include "third_party/libuv/include/uv.h"
@@ -35,7 +36,13 @@
 #include "packet/channel.h"
 #include "packet/packet.h"
 
+#include "test/simple.h"
+
 namespace packet {
+
+using std::dynamic_pointer_cast;
+using std::shared_ptr;
+using std::unique_ptr;
 
 class DummyPacket : public Packet {
  public:
@@ -66,11 +73,11 @@ class DummyPacket : public Packet {
   }
 };
 
-typedef std::shared_ptr<Channel<DummyPacket>> ChannelPtr;
-typedef std::shared_ptr<const DummyPacket> PacketPtr;
+typedef shared_ptr<Channel<DummyPacket>> ChannelPtr;
+typedef shared_ptr<const DummyPacket> PacketPtr;
 
 template <typename Channel>
-void dispose_channel(const std::shared_ptr<Channel>& channel) {
+void dispose_channel(const shared_ptr<Channel>& channel) {
   channel->self.reset();
   delete channel->write_async;
   delete channel->close_async;
@@ -184,7 +191,6 @@ TEST(ChannelClient, MakeClient) {
 }
 
 TEST(ChannelIntegration, ServerClose) {
-  typedef std::shared_ptr<Channel<DummyPacket>> ChannelPtr;
   const int CLOSED_ERR_CODE = 1;
   const std::string HOST = "127.0.0.1";
   const int PORT = 22222;
@@ -220,8 +226,8 @@ TEST(ChannelIntegration, ServerClose) {
   th_listener.join();
 }
 
-std::unique_ptr<DummyPacket> make_dummy_packet(uint8_t id) {
-  std::unique_ptr<DummyPacket> p(new DummyPacket());
+unique_ptr<DummyPacket> make_dummy_packet(uint8_t id) {
+  unique_ptr<DummyPacket> p(new DummyPacket());
   p->set_size(DummyPacket::SIZE);
   p->set_id(id);
   return p;
@@ -374,6 +380,132 @@ TEST(ChannelIntegration, ReliableMessaging) {
   th_client.join();
   th_listener.join();
 }
+
+using simple::AnotherSimple;
+using simple::Simple;
+using simple::SimpleParent;
+using simple::YetAnotherSimple;
+using simple::YetYetAnotherSimple;
+
+unique_ptr<YetAnotherSimple> make_yet_another_simple(int simples_count) {
+  auto container = unique_ptr<YetAnotherSimple>(new YetAnotherSimple(100));
+  for (auto i = 0; i < simples_count; i++) {
+    container->add_simples(Simple());
+  }
+  return container;
+}
+
+unique_ptr<YetYetAnotherSimple> make_yetyet_another_simple(int a_count) {
+  auto container = unique_ptr<YetYetAnotherSimple>(
+      new YetYetAnotherSimple(100));
+  for (auto i = 0; i < a_count; i++) {
+    container->add_a(AnotherSimple(10));
+  }
+  return container;
+}
+
+void check_yet_another_simple(const shared_ptr<const YetAnotherSimple>& pkt) {
+  ASSERT_NE(nullptr, pkt);
+
+  EXPECT_NE(0, pkt->get_s());
+  EXPECT_EQ(size_t(pkt->get_s()), pkt->get_simples().size());
+
+  for (auto& simple : pkt->get_simples()) {
+    EXPECT_EQ(uint8_t(1), simple->get_x());
+  }
+}
+
+void check_yetyet_another_simple(
+    const shared_ptr<const YetYetAnotherSimple>& pkt) {
+  ASSERT_NE(nullptr, pkt);
+
+  EXPECT_NE(0, pkt->get_s());
+  EXPECT_EQ(size_t(pkt->get_s() / 3), pkt->get_a().size());
+}
+
+
+TEST(ChannelIntegration, PingPongGeneratedPackets) {
+  typedef shared_ptr<Channel<SimpleParent>> ChannelPtr;
+  typedef shared_ptr<const SimpleParent> SimplePacketPtr;
+
+  const int CLOSED_ERR_CODE = 1;
+  const std::string HOST = "127.0.0.1";
+  const int PORT = 22225;
+
+  auto packet_factory = make_packet_factory<SimpleParent>();
+
+  auto th_listener = std::thread([&] () {
+        ChannelListener<SimpleParent> listener(packet_factory);
+        listener.on_accept([&] (const ChannelPtr& channel) {
+              channel->on_read(
+                  [&] (const ChannelPtr& channel, const SimplePacketPtr& pkt) {
+                    auto const y_simple =
+                        dynamic_pointer_cast<const YetAnotherSimple>(pkt);
+                    auto const yy_simple =
+                        dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
+
+                    auto is_pong = yy_simple != nullptr;
+
+                    if (is_pong) {
+                      check_yetyet_another_simple(yy_simple);
+                      channel->close();
+                      return;
+                    }
+
+                    check_yet_another_simple(y_simple);
+                    channel->write(make_yetyet_another_simple(2));
+                  });
+
+              channel->on_error([&] (const ChannelPtr& channel) {
+                    EXPECT_TRUE(false);
+                  });
+
+              channel->on_close([&] (const ChannelPtr& channel) {
+                    listener.stop();
+                  });
+            });
+        auto err = listener.listen(HOST, PORT);
+        EXPECT_EQ(CLOSED_ERR_CODE, err);
+        if (err != CLOSED_ERR_CODE) {
+          printf("Listener error: %s\n", uv_strerror(err));
+        }
+      });
+
+  auto th_client = std::thread([&] () {
+        std::chrono::milliseconds duration(2000);
+        std::this_thread::sleep_for(duration);
+
+        ChannelClient<SimpleParent> client(packet_factory);
+        client.on_connect([&] (const ChannelPtr& channel) {
+              channel->on_read(
+                  [&](const ChannelPtr& channel, const SimplePacketPtr& pkt) {
+                    auto const yy_simple =
+                        dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
+
+                    ASSERT_NE(nullptr, yy_simple);
+
+                    check_yetyet_another_simple(yy_simple);
+                    channel->write(make_yetyet_another_simple(2));
+                  });
+
+              channel->on_error([&](const ChannelPtr& channel) {
+                    channel->close();
+                  });
+
+              channel->on_close([&] (const ChannelPtr& channel) {
+                    client.stop();
+                  });
+
+              channel->write(make_yet_another_simple(2));
+            });
+        auto err = client.connect_to(HOST, PORT);
+        EXPECT_EQ(CLOSED_ERR_CODE, err);
+      });
+
+  th_client.join();
+  th_listener.join();
+}
+
 
 }  // namespace packet
 
