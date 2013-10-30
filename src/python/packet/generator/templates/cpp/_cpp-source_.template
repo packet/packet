@@ -1,0 +1,204 @@
+<%inherit file="cpp-base.template" />\
+<%!
+  from packet.generator.cpp import BuiltInType
+%>\
+<%block name="header">\
+${parent.header()}
+
+${self.common_include()}\
+
+% for packet in pom.includes.values():
+${self.include(packet.namespace)}
+% endfor
+% for packet in pom.packets.values():
+  % for child in packet.children:
+    % if child.pom.namespace != packet.pom.namespace:
+${self.include(child.pom.namespace)}
+    % endif
+  % endfor
+% endfor
+${self.include(pom.namespace)}
+</%block>\
+
+<%block name="code_body">
+% for name, packet in pom.packets.iteritems():
+<%
+  cpp_class_name = self.class_name(packet)
+  cpp_parent_class = self.get_parent(packet)
+%>\
+
+${cpp_class_name}::${self.lvalue_iovector_constructor_prototype(packet)}
+    : ${cpp_parent_class}(io_vector) {}
+
+${cpp_class_name}::${self.rvalue_iovector_constructor_prototype(packet)}
+    : ${cpp_parent_class}(std::move(io_vector)) {}
+
+${cpp_class_name}::${self.size_constructor_prototype(packet)}
+    : ${cpp_class_name}(packet::make_io_vector(size)) {
+  ${self.init_method_name(packet)}();
+}
+
+${cpp_class_name}::~${cpp_class_name}() {}
+
+${self.init_method_prototype(packet, qualified=True)} {
+  % if not packet.is_const_size():
+  ${cpp_class_name}::${self.setter_name(packet.get_size_field())}(MIN_SIZE);
+  % endif
+  // Invariants.
+  % for field, value in packet.get_type_selector_condition(True):
+  ${self.setter_name(field)}(${value});
+  % endfor
+}
+
+% for field in packet.fields:
+<%
+  cpp_type_name = self.field_type_name(field)
+  big_endian = 'true' if packet.big_endian and \
+      isinstance(field.type, BuiltInType) else 'false'
+%>\
+${self.getter_prototype(field, qualified=True)} {
+  return ${cpp_class_name}::${self.static_getter_name(field)}(vector);
+}
+
+${self.static_getter_prototype(field, qualified=True)} {
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  % if field.is_repeated() and not field.has_const_size():
+    % if field.get_size_field():
+  auto size = ${cpp_class_name}::${self.static_getter_name(field.get_size_field())}(io_vector);
+    % else:
+  auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector) - offset;
+    % endif
+
+    % if field.get_count_field():
+  auto count = ${cpp_class_name}::${self.static_getter_name(field.get_count_field())}(io_vector);
+    % else:
+  auto count = std::numeric_limits<std::size_t>::max();
+    % endif
+
+  return io_vector.read_repeated_data<${self.type_name(field.type)}, ${
+      big_endian}>(offset, count, size);
+  % else:
+  return io_vector.read_data<${cpp_type_name}, ${big_endian}>(offset);
+  % endif
+}
+
+${self.setter_prototype(field, qualified=True)} {
+  ${cpp_class_name}::${self.static_setter_name(field)}(
+      ::std::move(${field.name}), vector);
+}
+
+${self.static_setter_prototype(field, qualified=True)} {
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+
+  % if field.has_const_size():
+  io_vector.write_data<${cpp_type_name}, ${big_endian}>(${field.name}, offset);
+  % else:
+  offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
+    % if isinstance(field.type, BuiltInType):
+  auto element_size = sizeof(${self.type_name(field.type)});
+    % else:
+  auto element_size = ${field.name}.${self.size_method_name(field.packet)}();
+    % endif
+
+  auto packet_size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
+
+  io_vector.open_gap(offset, element_size, packet_size);
+  io_vector.write_data<${self.type_name(field.type)}, ${big_endian}>(${
+      field.name}, offset);
+
+    % if packet.get_size_field():
+  ${self.class_name(packet.get_size_field().packet)}::${
+      self.static_setter_name(packet.get_size_field())}(packet_size + element_size,
+      io_vector);
+    % endif
+
+    % if field.get_size_field():
+  auto size = ${self.class_name(field.get_size_field().packet)}::${
+      self.static_getter_name(field.get_size_field())}(io_vector);
+  ${self.class_name(field.get_size_field().packet)}::${
+      self.static_setter_name(field.get_size_field())}(size + element_size,
+          io_vector);
+    % endif
+
+    % if field.get_count_field():
+  auto count = ${self.class_name(field.get_count_field().packet)}::${
+      self.static_getter_name(field.get_count_field())}(io_vector);
+  ${self.class_name(field.get_count_field().packet)}::${
+      self.static_setter_name(field.get_count_field())}(count + 1, io_vector);
+    % endif
+  % endif
+}
+% endfor
+
+% for field in packet.fields:
+${self.offset_prototype(field, qualified=True)} {
+  size_t offset = ${field.offset[0]};
+  % for offset_field in field.offset[1]:
+  offset += ${cpp_class_name}::${self.field_size_method_name(offset_field)}(
+      io_vector);
+  % endfor
+  return offset;
+}
+
+  % if not field.has_const_size():
+${self.field_size_prototype(field, qualified=True)} {
+    % if field.get_size_field():
+  auto size = ${cpp_class_name}::${
+      self.static_getter_name(field.get_size_field())}(io_vector);
+  return size;
+    % else:
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+      % if field.has_implicit_size():
+  auto size = ${cpp_class_name}::${self.static_size_method_name(packet)}(io_vector);
+  return size - offset;
+      % elif field.get_count_field():
+  auto size = std::numeric_limits<std::size_t>::max();
+  auto count = ${cpp_class_name}::${
+      self.static_getter_name(field.get_count_field())}(io_vector);
+  return io_vector.get_repeated_data_size<${self.type_name(field.type)}>(
+      offset, count, size);
+      % endif
+    % endif
+}
+  % endif
+% endfor
+
+${self.size_prototype(packet, qualified=True)} {
+  return ${cpp_class_name}::${self.static_size_method_name(packet)}(vector);
+}
+
+${self.static_size_prototype(packet, qualified=True)} {
+  % if packet.is_const_size():
+  return ${packet.get_const_size()};
+  % else:
+  return ${self.class_name(packet.get_size_field().packet)}::${
+      self.static_getter_name(packet.get_size_field())}(io_vector);
+  % endif
+}
+
+% endfor
+</%block>
+<%block name="footer">
+% for packet in reversed(pom.packets.values()):
+<%
+  cpp_class_name = self.class_name(packet, qualified=True)
+%>\
+
+namespace packet {
+
+template<>
+std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const packet::IoVector& io_vec) {
+  % for p in packet.children:
+  if (${self.type_selector_cond(p)}) {
+    return make_packet<${self.class_name(p, qualified=True)}>(io_vec);
+  }
+  % endfor
+  return ::std::make_shared<${cpp_class_name}>(io_vec);
+}
+
+}  // namespace packet
+
+% endfor
+
+</%block>
+

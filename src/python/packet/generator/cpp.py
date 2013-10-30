@@ -157,8 +157,11 @@ class CppGenerator(PacketGenerator):
     header_file, source_file = _get_output_files(pom, output_dir)
     LOG.debug('Generating C++ code for %s in %s' % (pom.namespace, output_dir))
 
-    template_path = self.__get_template_path()
-    template_lookup = TemplateLookup(directories=[template_path],
+    extension_folder = self._get_extension_folder(opts)
+    template_path = extension_folder if extension_folder else []
+    template_path += [self.__get_template_path()]
+
+    template_lookup = TemplateLookup(directories=template_path,
                                      module_directory='/tmp/mako_modules')
 
     header_template = template_lookup.get_template('cpp-header.template')

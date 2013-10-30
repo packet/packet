@@ -32,7 +32,7 @@ from packet.parser.model import parse_file
 LOG = logging.getLogger('packet.generator.base')
 
 RECURSIVE_OPT_NAME = 'recursive'
-GENERATOR_PLUGIN = 'gen_plugin'
+EXTENSION_FOLDER = 'extension_folder'
 
 class PacketGenerator(object):
   ''' The base class for all genrerators. All packet code generators must
@@ -44,6 +44,10 @@ class PacketGenerator(object):
   def _is_recursvie(self, opts):  # pylint: disable=R0201
     ''' Whether the option enforces recursive generation. '''
     return opts.get(RECURSIVE_OPT_NAME) == True
+
+  def _get_extension_folder(self, opts):  # pylint: disable=R0201
+    ''' Returns the extension folder that contain extension templates. '''
+    return opts.get(EXTENSION_FOLDER)
 
   def generate(self, packet_file, output_dir, opts):
     ''' Geneates code based for the packet file.

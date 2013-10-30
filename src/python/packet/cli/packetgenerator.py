@@ -41,9 +41,9 @@ def parse_args():
   parser.add_argument('-l', '--lang', type=str, nargs=1, required=True,
                       choices=generator.supported_languages(),
                       help='generate codes in the specified language.')
-  parser.add_argument('-e', '--extension', type=str, nargs=1,
-                      help='extended generator that genetares extra code for '
-                           'given packet.')
+  parser.add_argument('-e', '--extension', type=str, nargs='+',
+                      help='extended template folder that contains the '
+                           'template to generate code for the given packet.')
   parser.add_argument('-o', '--output', type=str, nargs=1,
                       help='the output directory for generated codes.')
   parser.add_argument('-p', '--packetpath', type=str, nargs=1,
@@ -79,7 +79,7 @@ def main():
 
   opts = {
           base.RECURSIVE_OPT_NAME: args.recursive,
-          base.GENERATOR_PLUGIN: args.extension
+          base.EXTENSION_FOLDER: args.extension,
           }
 
   packet_generator = packet_generator_class()
