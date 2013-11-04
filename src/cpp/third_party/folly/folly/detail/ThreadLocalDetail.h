@@ -19,18 +19,21 @@
 
 #include <limits.h>
 #include <pthread.h>
-#include <list>
+
+#include <mutex>
 #include <string>
 #include <vector>
-
-#include <boost/thread/locks.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/locks.hpp>
 
 #include <glog/logging.h>
 
 #include "folly/Foreach.h"
+#include "folly/Exception.h"
 #include "folly/Malloc.h"
+
+// TODO(tudorb): Remove this declaration after Malloc.h is pushed to
+// third-party.
+extern "C" int allocm(void**, size_t*, size_t, int)
+__attribute__((weak));
 
 namespace folly {
 namespace threadlocal_detail {
@@ -146,14 +149,14 @@ struct StaticMeta {
   static StaticMeta<Tag>& instance() {
     // Leak it on exit, there's only one per process and we don't have to
     // worry about synchronization with exiting threads.
-    static bool constructed = (inst = new StaticMeta<Tag>());
+    static bool constructed = (inst_ = new StaticMeta<Tag>());
     (void)constructed; // suppress unused warning
-    return *inst;
+    return *inst_;
   }
 
   int nextId_;
   std::vector<int> freeIds_;
-  boost::mutex lock_;
+  std::mutex lock_;
   pthread_key_t pthreadKey_;
   ThreadEntry head_;
 
@@ -171,31 +174,34 @@ struct StaticMeta {
   }
 
   static __thread ThreadEntry threadEntry_;
-  static StaticMeta<Tag>* inst;
+  static StaticMeta<Tag>* inst_;
 
   StaticMeta() : nextId_(1) {
     head_.next = head_.prev = &head_;
     int ret = pthread_key_create(&pthreadKey_, &onThreadExit);
-    if (ret != 0) {
-      std::string msg;
-      switch (ret) {
-        case EAGAIN:
-          char buf[100];
-          snprintf(buf, sizeof(buf), "PTHREAD_KEYS_MAX (%d) is exceeded",
-                   PTHREAD_KEYS_MAX);
-          msg = buf;
-          break;
-        case ENOMEM:
-          msg = "Out-of-memory";
-          break;
-        default:
-          msg = "(unknown error)";
-      }
-      throw std::runtime_error("pthread_key_create failed: " + msg);
-    }
+    checkPosixError(ret, "pthread_key_create failed");
+
+    ret = pthread_atfork(/*prepare*/ &StaticMeta::preFork,
+                         /*parent*/ &StaticMeta::onForkParent,
+                         /*child*/ &StaticMeta::onForkChild);
+    checkPosixError(ret, "pthread_atfork failed");
   }
   ~StaticMeta() {
     LOG(FATAL) << "StaticMeta lives forever!";
+  }
+
+  static void preFork(void) {
+    instance().lock_.lock();  // Make sure it's created
+  }
+
+  static void onForkParent(void) {
+    inst_->lock_.unlock();
+  }
+
+  static void onForkChild(void) {
+    inst_->head_.next = inst_->head_.prev = &inst_->head_;
+    inst_->push_back(&threadEntry_);  // only the current thread survives
+    inst_->lock_.unlock();
   }
 
   static void onThreadExit(void* ptr) {
@@ -204,7 +210,7 @@ struct StaticMeta {
     // We wouldn't call pthread_setspecific unless we actually called get()
     DCHECK_NE(threadEntry_.elementsCapacity, 0);
     {
-      boost::lock_guard<boost::mutex> g(meta.lock_);
+      std::lock_guard<std::mutex> g(meta.lock_);
       meta.erase(&threadEntry_);
       // No need to hold the lock any longer; threadEntry_ is private to this
       // thread now that it's been removed from meta.
@@ -220,7 +226,7 @@ struct StaticMeta {
   static int create() {
     int id;
     auto & meta = instance();
-    boost::lock_guard<boost::mutex> g(meta.lock_);
+    std::lock_guard<std::mutex> g(meta.lock_);
     if (!meta.freeIds_.empty()) {
       id = meta.freeIds_.back();
       meta.freeIds_.pop_back();
@@ -236,19 +242,25 @@ struct StaticMeta {
       // Elements in other threads that use this id.
       std::vector<ElementWrapper> elements;
       {
-        boost::lock_guard<boost::mutex> g(meta.lock_);
+        std::lock_guard<std::mutex> g(meta.lock_);
         for (ThreadEntry* e = meta.head_.next; e != &meta.head_; e = e->next) {
           if (id < e->elementsCapacity && e->elements[id].ptr) {
             elements.push_back(e->elements[id]);
 
-            // Writing another thread's ThreadEntry from here is fine;
-            // the only other potential reader is the owning thread --
-            // from onThreadExit (which grabs the lock, so is properly
-            // synchronized with us) or from get() -- but using get() on a
-            // ThreadLocalPtr object that's being destroyed is a bug, so
-            // undefined behavior is fair game.
-            e->elements[id].ptr = NULL;
-            e->elements[id].deleter = NULL;
+            /*
+             * Writing another thread's ThreadEntry from here is fine;
+             * the only other potential reader is the owning thread --
+             * from onThreadExit (which grabs the lock, so is properly
+             * synchronized with us) or from get(), which also grabs
+             * the lock if it needs to resize the elements vector.
+             *
+             * We can't conflict with reads for a get(id), because
+             * it's illegal to call get on a thread local that's
+             * destructing.
+             */
+            e->elements[id].ptr = nullptr;
+            e->elements[id].deleter = nullptr;
+            e->elements[id].ownsDeleter = false;
           }
         }
         meta.freeIds_.push_back(id);
@@ -267,54 +279,94 @@ struct StaticMeta {
    * @id to fit in.
    */
   static void reserve(int id) {
-    size_t prevSize = threadEntry_.elementsCapacity;
-    size_t newSize = static_cast<size_t>((id + 5) * 1.7);
+    size_t prevCapacity = threadEntry_.elementsCapacity;
+    // Growth factor < 2, see folly/docs/FBVector.md; + 5 to prevent
+    // very slow start.
+    size_t newCapacity = static_cast<size_t>((id + 5) * 1.7);
+    assert(newCapacity > prevCapacity);
     auto& meta = instance();
-    ElementWrapper* ptr = nullptr;
-    // Rely on jemalloc to zero the memory if possible -- maybe it knows
-    // it's already zeroed and saves us some work.
-    if (!usingJEMalloc() ||
-        prevSize < jemallocMinInPlaceExpandable ||
-        (rallocm(
-          static_cast<void**>(static_cast<void*>(&threadEntry_.elements)),
-          NULL, newSize * sizeof(ElementWrapper), 0,
-          ALLOCM_NO_MOVE | ALLOCM_ZERO) != ALLOCM_SUCCESS)) {
-      // Sigh, must realloc, but we can't call realloc here, as elements is
-      // still linked in meta, so another thread might access invalid memory
-      // after realloc succeeds.  We'll copy by hand and update threadEntry_
-      // under the lock.
+    ElementWrapper* reallocated = nullptr;
+
+    // Need to grow. Note that we can't call realloc, as elements is
+    // still linked in meta, so another thread might access invalid memory
+    // after realloc succeeds. We'll copy by hand and update threadEntry_
+    // under the lock.
+    if (usingJEMalloc()) {
+      bool success = false;
+      size_t newByteSize = newCapacity * sizeof(ElementWrapper);
+      size_t realByteSize = 0;
+
+      // Try to grow in place.
       //
-      // Note that we're using calloc instead of malloc in order to zero
-      // the entire region.  rallocm (ALLOCM_ZERO) will only zero newly
-      // allocated memory, so if a previous allocation allocated more than
-      // we requested, it's our responsibility to guarantee that the tail
-      // is zeroed.  calloc() is simpler than malloc() followed by memset(),
-      // and potentially faster when dealing with a lot of memory, as
-      // it can get already-zeroed pages from the kernel.
-      if ((ptr = static_cast<ElementWrapper*>(
-             calloc(newSize, sizeof(ElementWrapper)))) != nullptr) {
-        memcpy(ptr, threadEntry_.elements, sizeof(ElementWrapper) * prevSize);
+      // Note that rallocm(ALLOCM_ZERO) will only zero newly allocated memory,
+      // even if a previous allocation allocated more than we requested.
+      // This is fine; we always use ALLOCM_ZERO with jemalloc and we
+      // always expand our allocation to the real size.
+      if (prevCapacity * sizeof(ElementWrapper) >=
+          jemallocMinInPlaceExpandable) {
+        success = (rallocm(reinterpret_cast<void**>(&threadEntry_.elements),
+                           &realByteSize,
+                           newByteSize,
+                           0,
+                           ALLOCM_NO_MOVE | ALLOCM_ZERO) == ALLOCM_SUCCESS);
+
+      }
+
+      // In-place growth failed.
+      if (!success) {
+        // Note that, unlike calloc,allocm(... ALLOCM_ZERO) zeros all
+        // allocated bytes (*realByteSize) and not just the requested
+        // bytes (newByteSize)
+        success = (allocm(reinterpret_cast<void**>(&reallocated),
+                          &realByteSize,
+                          newByteSize,
+                          ALLOCM_ZERO) == ALLOCM_SUCCESS);
+      }
+
+      if (success) {
+        // Expand to real size
+        assert(realByteSize / sizeof(ElementWrapper) >= newCapacity);
+        newCapacity = realByteSize / sizeof(ElementWrapper);
       } else {
+        throw std::bad_alloc();
+      }
+    } else {  // no jemalloc
+      // calloc() is simpler than malloc() followed by memset(), and
+      // potentially faster when dealing with a lot of memory, as it can get
+      // already-zeroed pages from the kernel.
+      reallocated = static_cast<ElementWrapper*>(
+          calloc(newCapacity, sizeof(ElementWrapper)));
+      if (!reallocated) {
         throw std::bad_alloc();
       }
     }
 
     // Success, update the entry
     {
-      boost::lock_guard<boost::mutex> g(meta.lock_);
-      if (prevSize == 0) {
+      std::lock_guard<std::mutex> g(meta.lock_);
+
+      if (prevCapacity == 0) {
         meta.push_back(&threadEntry_);
       }
-      if (ptr) {
+
+      if (reallocated) {
+       /*
+        * Note: we need to hold the meta lock when copying data out of
+        * the old vector, because some other thread might be
+        * destructing a ThreadLocal and writing to the elements vector
+        * of this thread.
+        */
+        memcpy(reallocated, threadEntry_.elements,
+               sizeof(ElementWrapper) * prevCapacity);
         using std::swap;
-        swap(ptr, threadEntry_.elements);
+        swap(reallocated, threadEntry_.elements);
       }
-      threadEntry_.elementsCapacity = newSize;
+      threadEntry_.elementsCapacity = newCapacity;
     }
 
-    free(ptr);
+    free(reallocated);
 
-    if (prevSize == 0) {
+    if (prevCapacity == 0) {
       pthread_setspecific(meta.pthreadKey_, &meta);
     }
   }
@@ -322,13 +374,14 @@ struct StaticMeta {
   static ElementWrapper& get(int id) {
     if (UNLIKELY(threadEntry_.elementsCapacity <= id)) {
       reserve(id);
+      assert(threadEntry_.elementsCapacity > id);
     }
     return threadEntry_.elements[id];
   }
 };
 
 template <class Tag> __thread ThreadEntry StaticMeta<Tag>::threadEntry_ = {0};
-template <class Tag> StaticMeta<Tag>* StaticMeta<Tag>::inst = nullptr;
+template <class Tag> StaticMeta<Tag>* StaticMeta<Tag>::inst_ = nullptr;
 
 }  // namespace threadlocal_detail
 }  // namespace folly

@@ -316,7 +316,7 @@ public:
 private:
 
   typedef std::integral_constant<bool,
-      std::has_trivial_copy_constructor<T>::value &&
+      boost::has_trivial_copy_constructor<T>::value &&
       sizeof(T) <= 16 // don't force large structures to be passed by value
     > should_pass_by_value;
   typedef typename std::conditional<
@@ -428,7 +428,7 @@ private:
 
   void M_destroy(T* p) noexcept {
     if (usingStdAllocator::value) {
-      if (!std::has_trivial_destructor<T>::value) p->~T();
+      if (!boost::has_trivial_destructor<T>::value) p->~T();
     } else {
       folly::fbv_allocator_traits<Allocator>::destroy(impl_, p);
     }
@@ -466,7 +466,7 @@ private:
 
   // optimized
   static void S_destroy_range(T* first, T* last) noexcept {
-    if (!std::has_trivial_destructor<T>::value) {
+    if (!boost::has_trivial_destructor<T>::value) {
       // EXPERIMENTAL DATA on fbvector<vector<int>> (where each vector<int> has
       //  size 0).
       // The unrolled version seems to work faster for small to medium sized
@@ -1653,7 +1653,6 @@ void fbvector<T, Allocator>::emplace_back_aux(Args&&... args) {
     size_type lower = folly::goodMallocSize(sizeof(T) + size() * sizeof(T));
     size_type upper = byte_sz;
     size_type extra = upper - lower;
-    assert(extra >= 0);
 
     void* p = impl_.b_;
     size_t actual;
@@ -1761,4 +1760,3 @@ void attach(fbvector<T, A>& v, T* data, size_t sz, size_t cap) {
 } // namespace folly
 
 #endif // FOLLY_FBVECTOR_H
-

@@ -30,6 +30,16 @@
 #define FOLLY_HAVE_BYTESWAP_H 1
 #endif
 
+/* Define to 1 if we support clock_gettime(2). */
+#ifndef FOLLY_HAVE_CLOCK_GETTIME
+#define FOLLY_HAVE_CLOCK_GETTIME 1
+#endif
+
+/* Define to 1 if strlen(3) is constexpr. */
+#ifndef HAVE_CONSTEXPR_STRLEN
+#define HAVE_CONSTEXPR_STRLEN 1
+#endif
+
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #ifndef FOLLY_HAVE_DLFCN_H
 #define FOLLY_HAVE_DLFCN_H 1
@@ -171,6 +181,15 @@
 /* Define to 1 if you have the <stdlib.h> header file. */
 #ifndef FOLLY_HAVE_STDLIB_H
 #define FOLLY_HAVE_STDLIB_H 1
+#endif
+
+/* Define to 1 if we have a usable std::is_trivially_copyable<T>
+   implementation. */
+/* #undef FOLLY_HAVE_STD__IS_TRIVIALLY_COPYABLE */
+
+/* Define to 1 if std::this_thread::sleep_for() is defined. */
+#ifndef FOLLY_HAVE_STD__THIS_THREAD__SLEEP_FOR
+#define FOLLY_HAVE_STD__THIS_THREAD__SLEEP_FOR 1
 #endif
 
 /* Define to 1 if you have the `strerror' function. */

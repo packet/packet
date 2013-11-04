@@ -47,7 +47,7 @@ Uri::Uri(StringPiece str) : port_(0) {
 
   boost::cmatch match;
   if (UNLIKELY(!boost::regex_match(str.begin(), str.end(), match, uriRegex))) {
-    throw std::invalid_argument("invalid URI");
+    throw std::invalid_argument(to<std::string>("invalid URI ", str));
   }
 
   scheme_ = submatch(match, 1);
@@ -74,12 +74,14 @@ Uri::Uri(StringPiece str) : port_(0) {
                             authority.second,
                             authorityMatch,
                             authorityRegex)) {
-      throw std::invalid_argument("invalid URI authority");
+      throw std::invalid_argument(
+          to<std::string>("invalid URI authority ",
+                          StringPiece(authority.first, authority.second)));
     }
 
     StringPiece port(authorityMatch[4].first, authorityMatch[4].second);
     if (!port.empty()) {
-      port_ = to<uint32_t>(port);
+      port_ = to<uint16_t>(port);
     }
 
     username_ = submatch(authorityMatch, 1);
@@ -90,6 +92,33 @@ Uri::Uri(StringPiece str) : port_(0) {
 
   query_ = submatch(match, 3);
   fragment_ = submatch(match, 4);
+}
+
+fbstring Uri::authority() const {
+  fbstring result;
+
+  // Port is 5 characters max and we have up to 3 delimiters.
+  result.reserve(host().size() + username().size() + password().size() + 8);
+
+  if (!username().empty() || !password().empty()) {
+    result.append(username());
+
+    if (!password().empty()) {
+      result.push_back(':');
+      result.append(password());
+    }
+
+    result.push_back('@');
+  }
+
+  result.append(host());
+
+  if (port() != 0) {
+    result.push_back(':');
+    toAppend(port(), &result);
+  }
+
+  return result;
 }
 
 }  // namespace folly

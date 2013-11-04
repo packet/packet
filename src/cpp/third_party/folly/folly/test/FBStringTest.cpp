@@ -30,6 +30,7 @@
 #include <gflags/gflags.h>
 
 #include "folly/Foreach.h"
+#include "folly/Portability.h"
 #include "folly/Random.h"
 #include "folly/Conv.h"
 
@@ -1028,7 +1029,7 @@ sed nisl. In diam lacus, lobortis ut posuere nec, ornare id quam.";
     ifstream input(f);
     fbstring line;
     FOR_EACH (i, v) {
-      EXPECT_TRUE(getline(input, line));
+      EXPECT_TRUE(!getline(input, line).fail());
       EXPECT_EQ(line, *i);
     }
   }
@@ -1081,22 +1082,14 @@ TEST(FBString, testMoveOperatorPlusRhs) {
   EXPECT_EQ(size1 + size2, test.size());
 }
 
+// The GNU C++ standard library throws an std::logic_error when an std::string
+// is constructed with a null pointer. Verify that we mirror this behavior.
+//
+// N.B. We behave this way even if the C++ library being used is something
+//      other than libstdc++. Someday if we deem it important to present
+//      identical undefined behavior for other platforms, we can re-visit this.
 TEST(FBString, testConstructionFromLiteralZero) {
-  try {
-    std::string s(0);
-    EXPECT_TRUE(false);
-  } catch (const std::logic_error&) {
-  } catch (...) {
-    EXPECT_TRUE(false);
-  }
-
-  try {
-    fbstring s(0);
-    EXPECT_TRUE(false);
-  } catch (const std::logic_error& e) {
-  } catch (...) {
-    EXPECT_TRUE(false);
-  }
+  EXPECT_THROW(fbstring s(0), std::logic_error);
 }
 
 TEST(FBString, testFixedBugs) {
@@ -1137,8 +1130,19 @@ TEST(FBString, testFixedBugs) {
     std::swap(str, str);
     EXPECT_EQ(1337, str.size());
   }
+  { // D1012196, --allocator=malloc
+    fbstring str(128, 'f');
+    str.clear();  // Empty medium string.
+    fbstring copy(str);  // Medium string of 0 capacity.
+    copy.push_back('b');
+    EXPECT_GE(copy.capacity(), 1);
+  }
 }
 
+TEST(FBString, findWithNpos) {
+  fbstring fbstr("localhost:80");
+  EXPECT_EQ(fbstring::npos, fbstr.find(":", fbstring::npos));
+}
 
 TEST(FBString, testHash) {
   fbstring a;
@@ -1160,6 +1164,19 @@ TEST(FBString, testFrontBack) {
   str.back() = 'O';
   EXPECT_EQ(str.back(), 'O');
   EXPECT_EQ(str, "HellO");
+}
+
+TEST(FBString, noexcept) {
+  EXPECT_TRUE(noexcept(fbstring()));
+  // std::move is not marked noexcept in gcc 4.6, sigh
+#if __GNUC_PREREQ(4, 7)
+  fbstring x;
+  EXPECT_FALSE(noexcept(fbstring(x)));
+  EXPECT_TRUE(noexcept(fbstring(std::move(x))));
+  fbstring y;
+  EXPECT_FALSE(noexcept(y = x));
+  EXPECT_TRUE(noexcept(y = std::move(x)));
+#endif
 }
 
 int main(int argc, char** argv) {

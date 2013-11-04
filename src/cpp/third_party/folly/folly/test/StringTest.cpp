@@ -481,6 +481,13 @@ void splitTest() {
   EXPECT_EQ(parts[2], "c");
   parts.clear();
 
+  folly::split(',', StringPiece("a,b,c"), parts);
+  EXPECT_EQ(parts.size(), 3);
+  EXPECT_EQ(parts[0], "a");
+  EXPECT_EQ(parts[1], "b");
+  EXPECT_EQ(parts[2], "c");
+  parts.clear();
+
   folly::split(',', string("a,b,c"), parts);
   EXPECT_EQ(parts.size(), 3);
   EXPECT_EQ(parts[0], "a");
@@ -559,16 +566,25 @@ void splitTest() {
   EXPECT_EQ(parts[0], "");
   parts.clear();
 
+  folly::split("a", StringPiece(), parts, true);
+  EXPECT_EQ(parts.size(), 0);
+  parts.clear();
+
+  folly::split("a", StringPiece(), parts);
+  EXPECT_EQ(parts.size(), 1);
+  EXPECT_EQ(parts[0], "");
+  parts.clear();
+
   folly::split("a", "abcdefg", parts, true);
   EXPECT_EQ(parts.size(), 1);
   EXPECT_EQ(parts[0], "bcdefg");
   parts.clear();
 
-  orig = "All, , your bases, are , , belong to us";
+  orig = "All, , your base, are , , belong to us";
   folly::split(", ", orig, parts, true);
   EXPECT_EQ(parts.size(), 4);
   EXPECT_EQ(parts[0], "All");
-  EXPECT_EQ(parts[1], "your bases");
+  EXPECT_EQ(parts[1], "your base");
   EXPECT_EQ(parts[2], "are ");
   EXPECT_EQ(parts[3], "belong to us");
   parts.clear();
@@ -576,7 +592,7 @@ void splitTest() {
   EXPECT_EQ(parts.size(), 6);
   EXPECT_EQ(parts[0], "All");
   EXPECT_EQ(parts[1], "");
-  EXPECT_EQ(parts[2], "your bases");
+  EXPECT_EQ(parts[2], "your base");
   EXPECT_EQ(parts[3], "are ");
   EXPECT_EQ(parts[4], "");
   EXPECT_EQ(parts[5], "belong to us");
@@ -689,11 +705,11 @@ void piecesTest() {
   EXPECT_EQ(pieces[0], "bcdefg");
   pieces.clear();
 
-  orig = "All, , your bases, are , , belong to us";
+  orig = "All, , your base, are , , belong to us";
   folly::split(", ", orig, pieces, true);
   EXPECT_EQ(pieces.size(), 4);
   EXPECT_EQ(pieces[0], "All");
-  EXPECT_EQ(pieces[1], "your bases");
+  EXPECT_EQ(pieces[1], "your base");
   EXPECT_EQ(pieces[2], "are ");
   EXPECT_EQ(pieces[3], "belong to us");
   pieces.clear();
@@ -701,7 +717,7 @@ void piecesTest() {
   EXPECT_EQ(pieces.size(), 6);
   EXPECT_EQ(pieces[0], "All");
   EXPECT_EQ(pieces[1], "");
-  EXPECT_EQ(pieces[2], "your bases");
+  EXPECT_EQ(pieces[2], "your base");
   EXPECT_EQ(pieces[3], "are ");
   EXPECT_EQ(pieces[4], "");
   EXPECT_EQ(pieces[5], "belong to us");
@@ -949,9 +965,10 @@ BENCHMARK(splitStrFixed, iters) {
 
 BENCHMARK(boost_splitOnSingleChar, iters) {
   static const std::string line = "one:two:three:four";
+  bool(*pred)(char) = [] (char c) -> bool { return c == ':'; };
   for (int i = 0; i < iters << 4; ++i) {
     std::vector<boost::iterator_range<std::string::const_iterator> > pieces;
-    boost::split(pieces, line, [] (char c) { return c == ':'; });
+    boost::split(pieces, line, pred);
   }
 }
 
