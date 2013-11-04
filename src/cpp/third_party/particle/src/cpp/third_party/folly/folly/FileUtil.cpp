@@ -20,6 +20,8 @@
 #ifdef __APPLE__
 #include <fcntl.h>
 #endif
+#include <sys/file.h>
+#include <sys/socket.h>
 
 #include "folly/detail/FileUtilDetail.h"
 
@@ -52,11 +54,21 @@ int fsyncNoInt(int fd) {
   return wrapNoInt(fsync, fd);
 }
 
+int dupNoInt(int fd) {
+  return wrapNoInt(dup, fd);
+}
+
+int dup2NoInt(int oldfd, int newfd) {
+  return wrapNoInt(dup2, oldfd, newfd);
+}
+
 int fdatasyncNoInt(int fd) {
-#ifndef __APPLE__
-  return wrapNoInt(fdatasync, fd);
-#else
+#if defined(__APPLE__)
   return wrapNoInt(fcntl, fd, F_FULLFSYNC);
+#elif defined(__FreeBSD__)
+  return wrapNoInt(fsync, fd);
+#else
+  return wrapNoInt(fdatasync, fd);
 #endif
 }
 
@@ -66,6 +78,14 @@ int ftruncateNoInt(int fd, off_t len) {
 
 int truncateNoInt(const char* path, off_t len) {
   return wrapNoInt(truncate, path, len);
+}
+
+int flockNoInt(int fd, int operation) {
+  return wrapNoInt(flock, fd, operation);
+}
+
+int shutdownNoInt(int fd, int how) {
+  return wrapNoInt(shutdown, fd, how);
 }
 
 ssize_t readNoInt(int fd, void* buf, size_t count) {
@@ -112,7 +132,7 @@ ssize_t readvFull(int fd, iovec* iov, int count) {
   return wrapvFull(readv, fd, iov, count);
 }
 
-#ifdef FOLLY_HAVE_PREADV
+#if FOLLY_HAVE_PREADV
 ssize_t preadvFull(int fd, iovec* iov, int count, off_t offset) {
   return wrapvFull(preadv, fd, iov, count, offset);
 }
@@ -122,7 +142,7 @@ ssize_t writevFull(int fd, iovec* iov, int count) {
   return wrapvFull(writev, fd, iov, count);
 }
 
-#ifdef FOLLY_HAVE_PWRITEV
+#if FOLLY_HAVE_PWRITEV
 ssize_t pwritevFull(int fd, iovec* iov, int count, off_t offset) {
   return wrapvFull(pwritev, fd, iov, count, offset);
 }

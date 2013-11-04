@@ -23,6 +23,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "folly/Portability.h"
+
 #include <bits/c++config.h>
 
 #include <boost/type_traits.hpp>
@@ -223,7 +225,7 @@ template <class T> struct IsZeroInitializable
  * although that is not guaranteed by the standard.
  */
 
-namespace std {
+FOLLY_NAMESPACE_STD_BEGIN
 
 template <class T, class U>
   struct pair;
@@ -247,7 +249,7 @@ template <class K, class V, class C, class A>
 template <class T>
   class shared_ptr;
 
-}
+FOLLY_NAMESPACE_STD_END
 
 namespace boost {
 
@@ -402,6 +404,16 @@ constexpr bool is_negative(T x) {
 template <typename T>
 constexpr bool is_non_positive(T x) { return !x || folly::is_negative(x); }
 
+// same as `x > 0`
+template <typename T>
+constexpr bool is_positive(T x) { return !is_non_positive(x); }
+
+// same as `x >= 0`
+template <typename T>
+constexpr bool is_non_negative(T x) {
+  return !x || is_positive(x);
+}
+
 template <typename RHS, RHS rhs, typename LHS>
 bool less_than(LHS const lhs) {
   return detail::less_than_impl<
@@ -422,8 +434,6 @@ FOLLY_ASSUME_FBVECTOR_COMPATIBLE_3(std::basic_string);
 FOLLY_ASSUME_FBVECTOR_COMPATIBLE_2(std::vector);
 FOLLY_ASSUME_FBVECTOR_COMPATIBLE_2(std::list);
 FOLLY_ASSUME_FBVECTOR_COMPATIBLE_2(std::deque);
-FOLLY_ASSUME_FBVECTOR_COMPATIBLE_4(std::map);
-FOLLY_ASSUME_FBVECTOR_COMPATIBLE_3(std::set);
 FOLLY_ASSUME_FBVECTOR_COMPATIBLE_2(std::unique_ptr);
 FOLLY_ASSUME_FBVECTOR_COMPATIBLE_1(std::shared_ptr);
 FOLLY_ASSUME_FBVECTOR_COMPATIBLE_1(std::function);

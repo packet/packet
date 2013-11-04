@@ -238,7 +238,9 @@ class IOBuf {
    * buffer as the first argument, and the supplied userData value as the
    * second argument.  The free function must never throw exceptions.
    *
-   * If no FreeFunction is specified, the buffer will be freed using free().
+   * If no FreeFunction is specified, the buffer will be freed using free()
+   * which will result in undefined behavior if the memory was allocated
+   * using 'new'.
    *
    * The IOBuf data pointer will initially point to the start of the buffer,
    *
@@ -556,7 +558,7 @@ class IOBuf {
    * This does not modify any actual data in the buffer.
    */
   void prepend(uint32_t amount) {
-    CHECK(amount <= headroom());
+    DCHECK_LE(amount, headroom());
     data_ -= amount;
     length_ += amount;
   }
@@ -572,7 +574,7 @@ class IOBuf {
    * This does not modify any actual data in the buffer.
    */
   void append(uint32_t amount) {
-    CHECK(amount <= tailroom());
+    DCHECK_LE(amount, tailroom());
     length_ += amount;
   }
 
@@ -586,7 +588,7 @@ class IOBuf {
    * This does not modify any actual data in the buffer.
    */
   void trimStart(uint32_t amount) {
-    CHECK(amount <= length_);
+    DCHECK_LE(amount, length_);
     data_ += amount;
     length_ -= amount;
   }
@@ -601,7 +603,7 @@ class IOBuf {
    * This does not modify any actual data in the buffer.
    */
   void trimEnd(uint32_t amount) {
-    CHECK(amount <= length_);
+    DCHECK_LE(amount, length_);
     length_ -= amount;
   }
 
@@ -809,16 +811,29 @@ class IOBuf {
    * This only checks the current IOBuf, and not other IOBufs in the chain.
    */
   bool isSharedOne() const {
+    if (LIKELY(flags_ & (kFlagUserOwned | kFlagMaybeShared)) == 0) {
+      return false;
+    }
+
     // If this is a user-owned buffer, it is always considered shared
     if (flags_ & kFlagUserOwned) {
       return true;
     }
 
-    if (flags_ & kFlagExt) {
-      return ext_.sharedInfo->refcount.load(std::memory_order_acquire) > 1;
-    } else {
-      return false;
+    // an internal buffer wouldn't have kFlagMaybeShared or kFlagUserOwned
+    // so we would have returned false already.  The only remaining case
+    // is an external buffer which may be shared, so we need to read
+    // the reference count.
+    assert((flags_ & (kFlagExt | kFlagMaybeShared)) ==
+           (kFlagExt | kFlagMaybeShared));
+
+    bool shared =
+      ext_.sharedInfo->refcount.load(std::memory_order_acquire) > 1;
+    if (!shared) {
+      // we're the last one left
+      flags_ &= ~kFlagMaybeShared;
     }
+    return shared;
   }
 
   /**
@@ -880,12 +895,14 @@ class IOBuf {
    * Throws std::bad_alloc on error.  On error the IOBuf chain will be
    * unmodified.  Throws std::overflow_error if the length of the entire chain
    * larger than can be described by a uint32_t capacity.
+   *
+   * Returns ByteRange that points to the data IOBuf stores.
    */
-  void coalesce() {
-    if (!isChained()) {
-      return;
+  ByteRange coalesce() {
+    if (isChained()) {
+      coalesceSlow();
     }
-    coalesceSlow();
+    return ByteRange(data_, length_);
   }
 
   /**
@@ -972,10 +989,11 @@ class IOBuf {
   Iterator end() const;
 
  private:
-  enum FlagsEnum {
+  enum FlagsEnum : uint32_t {
     kFlagExt = 0x1,
     kFlagUserOwned = 0x2,
     kFlagFreeSharedInfo = 0x4,
+    kFlagMaybeShared = 0x8,
   };
 
   // Values for the ExternalBuf type field.
@@ -1082,7 +1100,7 @@ class IOBuf {
    */
   uint8_t* data_;
   uint32_t length_;
-  uint32_t flags_;
+  mutable uint32_t flags_;
 
   union {
     ExternalBuf ext_;
@@ -1123,7 +1141,7 @@ typename std::enable_if<detail::IsUniquePtrToSL<UniquePtr>::value,
                         std::unique_ptr<IOBuf>>::type
 IOBuf::takeOwnership(UniquePtr&& buf, size_t count) {
   size_t size = count * sizeof(typename UniquePtr::element_type);
-  CHECK_LT(size, size_t(std::numeric_limits<uint32_t>::max()));
+  DCHECK_LT(size, size_t(std::numeric_limits<uint32_t>::max()));
   auto deleter = new UniquePtrDeleter<UniquePtr>(buf.get_deleter());
   return takeOwnership(buf.release(),
                        size,

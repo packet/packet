@@ -61,8 +61,11 @@ fbstring_test_using_jemalloc_SOURCES = FBStringTest.cpp
 fbstring_test_using_jemalloc_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la
 TESTS += fbstring_test_using_jemalloc
 
+if HAVE_LINUX
 eventfd_test_SOURCES = EventFDTest.cpp
 eventfd_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la
+TESTS += eventfd_test
+endif
 
 thread_cached_int_test_SOURCES = ThreadCachedIntTest.cpp
 thread_cached_int_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la
@@ -70,7 +73,7 @@ thread_cached_int_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark
 thread_local_test_SOURCES = ThreadLocalTest.cpp
 thread_local_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la
 
-TESTS += eventfd_test thread_cached_int_test thread_local_test
+TESTS += thread_cached_int_test thread_local_test
 
 fbvector_test_SOURCES = FBVectorTest.cpp
 fbvector_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la
@@ -114,7 +117,7 @@ endian_test_LDADD = libgtestmain.la $(top_builddir)/libfolly.la
 TESTS += endian_test
 
 rw_spinlock_test_SOURCES = RWSpinLockTest.cpp
-rw_spinlock_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la  $(BOOST_THREAD_LIB)
+rw_spinlock_test_LDADD = libgtestmain.la $(top_builddir)/libfollybenchmark.la $(top_builddir)/libfolly.la
 TESTS += rw_spinlock_test
 
 synchronized_test_SOURCES = SynchronizedTest.cpp
@@ -174,11 +177,11 @@ cpuid_test_LDADD = libgtestmain.la $(top_builddir)/libfolly.la
 TESTS += cpuid_test
 
 spooky_hash_v1_test_SOURCES = SpookyHashV1Test.cpp
-spooky_hash_v1_test_LDADD = -lrt $(top_builddir)/libfolly.la
+spooky_hash_v1_test_LDADD = $(top_builddir)/libfolly.la $(top_builddir)/libfollybenchmark.la
 TESTS += spooky_hash_v1_test
 
 spooky_hash_v2_test_SOURCES = SpookyHashV2Test.cpp
-spooky_hash_v2_test_LDADD = -lrt $(top_builddir)/libfolly.la
+spooky_hash_v2_test_LDADD = $(top_builddir)/libfolly.la $(top_builddir)/libfollybenchmark.la
 TESTS += spooky_hash_v2_test
 
 check_PROGRAMS= $(TESTS)

@@ -290,6 +290,31 @@ TEST(StringPiece, InvalidRange) {
   EXPECT_THROW(a.subpiece(6), std::out_of_range);
 }
 
+#if FOLLY_HAVE_CONSTEXPR_STRLEN
+constexpr char helloArray[] = "hello";
+
+TEST(StringPiece, Constexpr) {
+  constexpr StringPiece hello1("hello");
+  EXPECT_EQ("hello", hello1);
+
+  constexpr StringPiece hello2(helloArray);
+  EXPECT_EQ("hello", hello2);
+}
+#endif
+
+TEST(qfind, UInt32_Ranges) {
+  vector<uint32_t> a({1, 2, 3, 260, 5});
+  vector<uint32_t> b({2, 3, 4});
+
+  auto a_range = folly::Range<const uint32_t*>(&a[0], a.size());
+  auto b_range = folly::Range<const uint32_t*>(&b[0], b.size());
+
+  EXPECT_EQ(qfind(a_range, b_range), string::npos);
+
+  a[3] = 4;
+  EXPECT_EQ(qfind(a_range, b_range), 1);
+}
+
 template <typename NeedleFinder>
 class NeedleFinderTest : public ::testing::Test {
  public:
@@ -418,14 +443,18 @@ const size_t kPageSize = 4096;
 void createProtectedBuf(StringPiece& contents, char** buf) {
   ASSERT_LE(contents.size(), kPageSize);
   const size_t kSuccess = 0;
-  char* tmp;
-  if (kSuccess != posix_memalign((void**)buf, kPageSize, 2 * kPageSize)) {
+  if (kSuccess != posix_memalign((void**)buf, kPageSize, 4 * kPageSize)) {
     ASSERT_FALSE(true);
   }
   mprotect(*buf + kPageSize, kPageSize, PROT_NONE);
   size_t newBegin = kPageSize - contents.size();
   memcpy(*buf + newBegin, contents.data(), contents.size());
   contents.reset(*buf + newBegin, contents.size());
+}
+
+void freeProtectedBuf(char* buf) {
+  mprotect(buf + kPageSize, kPageSize, PROT_READ | PROT_WRITE);
+  free(buf);
 }
 
 TYPED_TEST(NeedleFinderTest, NoSegFault) {
@@ -459,8 +488,8 @@ TYPED_TEST(NeedleFinderTest, NoSegFault) {
                                      s1.begin(), s1.end());
         auto e2 = (f2 == s2.end()) ? StringPiece::npos : f2 - s2.begin();
         EXPECT_EQ(r2, e2);
-        free(buf1);
-        free(buf2);
+        freeProtectedBuf(buf1);
+        freeProtectedBuf(buf2);
       }
     }
   }

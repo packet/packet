@@ -105,11 +105,39 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
 
+// FBString cannot use throw when replacing std::string, though it may still
+// use std::__throw_*
+#define throw FOLLY_FBSTRING_MAY_NOT_USE_THROW
+
 #ifdef _LIBSTDCXX_FBSTRING
 namespace std _GLIBCXX_VISIBILITY(default) {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 #else
 namespace folly {
+#endif
+
+// Different versions of gcc/clang support different versions of
+// the address sanitizer attribute.  Unfortunately, this attribute
+// has issues when inlining is used, so disable that as well.
+#if defined(__clang__)
+# if __has_feature(address_sanitizer)
+#  if __has_attribute(__no_address_safety_analysis__)
+#   define FBSTRING_DISABLE_ADDRESS_SANITIZER \
+      __attribute__((__no_address_safety_analysis__, __noinline__))
+#  elif __has_attribute(__no_sanitize_address__)
+#   define FBSTRING_DISABLE_ADDRESS_SANITIZER \
+      __attribute__((__no_sanitize_address__, __noinline__))
+#  endif
+# endif
+#elif defined (__GNUC__) && \
+      (__GNUC__ == 4) && \
+      (__GNUC_MINOR__ >= 8) && \
+      __SANITIZE_ADDRESS__
+# define FBSTRING_DISABLE_ADDRESS_SANITIZER \
+    __attribute__((__no_address_safety_analysis__, __noinline__))
+#endif
+#ifndef FBSTRING_DISABLE_ADDRESS_SANITIZER
+# define FBSTRING_DISABLE_ADDRESS_SANITIZER
 #endif
 
 namespace fbstring_detail {
@@ -281,7 +309,7 @@ private:
  */
 template <class Char> class fbstring_core {
 public:
-  fbstring_core() {
+  fbstring_core() noexcept {
     // Only initialize the tag, will set the MSBs (i.e. the small
     // string size) to zero too
     ml_.capacity_ = maxSmallSize << (8 * (sizeof(size_t) - sizeof(Char)));
@@ -335,7 +363,7 @@ public:
     assert(memcmp(data(), rhs.data(), size() * sizeof(Char)) == 0);
   }
 
-  fbstring_core(fbstring_core&& goner) {
+  fbstring_core(fbstring_core&& goner) noexcept {
     if (goner.category() == isSmall) {
       // Just copy, leave the goner in peace
       new(this) fbstring_core(goner.small_, goner.smallSize());
@@ -347,7 +375,11 @@ public:
     }
   }
 
-  fbstring_core(const Char *const data, const size_t size) {
+  // NOTE(agallagher): The word-aligned copy path copies bytes which are
+  // outside the range of the string, and makes address sanitizer unhappy,
+  // so just disable it on this function.
+  fbstring_core(const Char *const data, const size_t size)
+      FBSTRING_DISABLE_ADDRESS_SANITIZER {
     // Simplest case first: small strings are bitblitted
     if (size <= maxSmallSize) {
       // Layout is: Char* data_, size_t size_, size_t capacity_
@@ -400,7 +432,7 @@ public:
     assert(memcmp(this->data(), data, size * sizeof(Char)) == 0);
   }
 
-  ~fbstring_core() {
+  ~fbstring_core() noexcept {
     auto const c = category();
     if (c == isSmall) {
       return;
@@ -413,22 +445,24 @@ public:
   }
 
   // Snatches a previously mallocated string. The parameter "size"
-  // is the size of the string, and the parameter "capacity" is the size
-  // of the mallocated block.  The string must be \0-terminated, so
-  // data[size] == '\0' and capacity >= size + 1.
+  // is the size of the string, and the parameter "allocatedSize"
+  // is the size of the mallocated block.  The string must be
+  // \0-terminated, so allocatedSize >= size + 1 and data[size] == '\0'.
   //
-  // So if you want a 2-character string, pass malloc(3) as "data", pass 2 as
-  // "size", and pass 3 as "capacity".
-  fbstring_core(Char *const data, const size_t size,
-                const size_t capacity,
+  // So if you want a 2-character string, pass malloc(3) as "data",
+  // pass 2 as "size", and pass 3 as "allocatedSize".
+  fbstring_core(Char * const data,
+                const size_t size,
+                const size_t allocatedSize,
                 AcquireMallocatedString) {
     if (size > 0) {
-      assert(capacity > size);
+      assert(allocatedSize >= size + 1);
       assert(data[size] == '\0');
       // Use the medium string storage
       ml_.data_ = data;
       ml_.size_ = size;
-      ml_.capacity_ = capacity | isMedium;
+      // Don't forget about null terminator
+      ml_.capacity_ = (allocatedSize - 1) | isMedium;
     } else {
       // No need for the memory
       free(data);
@@ -572,7 +606,7 @@ public:
           smartRealloc(
             ml_.data_,
             ml_.size_ * sizeof(Char),
-            ml_.capacity() * sizeof(Char),
+            (ml_.capacity() + 1) * sizeof(Char),
             capacityBytes));
         writeTerminator();
         ml_.capacity_ = (capacityBytes / sizeof(Char) - 1) | isMedium;
@@ -664,7 +698,7 @@ public:
     } else {
       sz = ml_.size_;
       if (sz == capacity()) {  // always true for isShared()
-        reserve(sz * 3 / 2);  // ensures not shared
+        reserve(1 + sz * 3 / 2);  // ensures not shared
       }
     }
     assert(!isShared());
@@ -986,7 +1020,7 @@ private:
 
 public:
   // C++11 21.4.2 construct/copy/destroy
-  explicit basic_fbstring(const A& a = A()) {
+  explicit basic_fbstring(const A& a = A()) noexcept {
   }
 
   basic_fbstring(const basic_fbstring& str)
@@ -994,7 +1028,8 @@ public:
   }
 
   // Move constructor
-  basic_fbstring(basic_fbstring&& goner) : store_(std::move(goner.store_)) {
+  basic_fbstring(basic_fbstring&& goner) noexcept
+      : store_(std::move(goner.store_)) {
   }
 
 #ifndef _LIBSTDCXX_FBSTRING
@@ -1052,7 +1087,7 @@ public:
     assign(il.begin(), il.end());
   }
 
-  ~basic_fbstring() {
+  ~basic_fbstring() noexcept {
   }
 
   basic_fbstring& operator=(const basic_fbstring& lhs) {
@@ -1078,7 +1113,7 @@ public:
   }
 
   // Move assignment
-  basic_fbstring& operator=(basic_fbstring&& goner) {
+  basic_fbstring& operator=(basic_fbstring&& goner) noexcept {
     if (FBSTRING_UNLIKELY(&goner == this)) {
       // Compatibility with std::basic_string<>,
       // C++11 21.4.2 [string.cons] / 23 requires self-move-assignment support.
@@ -1759,7 +1794,9 @@ public:
                  const size_type nsize) const {
     if (!nsize) return pos;
     auto const size = this->size();
-    if (nsize + pos > size) return npos;
+    // nsize + pos can overflow (eg pos == npos), guard against that by checking
+    // that nsize + pos does not wrap around.
+    if (nsize + pos > size || nsize + pos < pos) return npos;
     // Don't use std::search, use a Boyer-Moore-like trick by comparing
     // the last characters first
     auto const haystack = data();
@@ -2392,6 +2429,8 @@ struct hash< ::folly::fbstring> {
 
 #endif // _LIBSTDCXX_FBSTRING
 
+#undef FBSTRING_DISABLE_ADDRESS_SANITIZER
+#undef throw
 #undef FBSTRING_LIKELY
 #undef FBSTRING_UNLIKELY
 

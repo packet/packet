@@ -21,12 +21,13 @@
 #include "folly-config.h"
 #endif
 
-#ifdef FOLLY_HAVE_FEATURES_H
+#if FOLLY_HAVE_FEATURES_H
 #include <features.h>
 #endif
 
+#include "CPortability.h"
 
-#ifdef FOLLY_HAVE_SCHED_H
+#if FOLLY_HAVE_SCHED_H
  #include <sched.h>
  #ifndef FOLLY_HAVE_PTHREAD_YIELD
   #define pthread_yield sched_yield
@@ -83,5 +84,43 @@ struct MaxAlign { char c; } __attribute__((aligned));
 #  endif
 # endif
 #endif
+
+// It turns out that GNU libstdc++ and LLVM libc++ differ on how they implement
+// the 'std' namespace; the latter uses inline namepsaces. Wrap this decision
+// up in a macro to make forward-declarations easier.
+#if FOLLY_USE_LIBCPP
+#define FOLLY_NAMESPACE_STD_BEGIN     _LIBCPP_BEGIN_NAMESPACE_STD
+#define FOLLY_NAMESPACE_STD_END       _LIBCPP_END_NAMESPACE_STD
+#else
+#define FOLLY_NAMESPACE_STD_BEGIN     namespace std {
+#define FOLLY_NAMESPACE_STD_END       }
+#endif
+
+// Some platforms lack clock_gettime(2) and clock_getres(2). Inject our own
+// versions of these into the global namespace.
+#if FOLLY_HAVE_CLOCK_GETTIME
+#include <time.h>
+#else
+#include "folly/detail/Clock.h"
+#endif
+
+#if defined(__cplusplus)
+// Unfortunately, boost::has_trivial_copy<T> is broken in libc++ due to its
+// usage of __has_trivial_copy(), so we can't use it as a
+// least-common-denominator for C++11 implementations that don't support
+// std::is_trivially_copyable<T>.
+//
+//      http://stackoverflow.com/questions/12754886/has-trivial-copy-behaves-differently-in-clang-and-gcc-whos-right
+//
+// As a result, use std::is_trivially_copyable() where it exists, and fall back
+// to Boost otherwise.
+#if FOLLY_HAVE_STD__IS_TRIVIALLY_COPYABLE
+#include <type_traits>
+#define FOLLY_IS_TRIVIALLY_COPYABLE(T)      (std::is_trivially_copyable<T>::value)
+#else
+#include <boost/type_traits.hpp>
+#define FOLLY_IS_TRIVIALLY_COPYABLE(T)      (boost::has_trivial_copy<T>::value)
+#endif
+#endif // __cplusplus
 
 #endif // FOLLY_PORTABILITY_H_

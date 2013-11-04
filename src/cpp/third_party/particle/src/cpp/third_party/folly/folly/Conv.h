@@ -122,6 +122,23 @@ typename std::tuple_element<
   return getLastElement(vs...);
 }
 
+// This class exists to specialize away std::tuple_element in the case where we
+// have 0 template arguments. Without this, Clang/libc++ will blow a
+// static_assert even if tuple_element is protected by an enable_if.
+template <class... Ts>
+struct last_element {
+  typedef typename std::enable_if<
+    sizeof...(Ts) >= 1,
+    typename std::tuple_element<
+      sizeof...(Ts) - 1, std::tuple<Ts...>
+    >::type>::type type;
+};
+
+template <>
+struct last_element<> {
+  typedef void type;
+};
+
 } // namespace detail
 
 /*******************************************************************************
@@ -323,7 +340,6 @@ typename std::enable_if<
   std::is_integral<Src>::value && std::is_signed<Src>::value &&
   detail::IsSomeString<Tgt>::value && sizeof(Src) >= 4>::type
 toAppend(Src value, Tgt * result) {
-  typedef typename std::make_unsigned<Src>::type Usrc;
   char buffer[20];
   if (value < 0) {
     result->push_back('-');
@@ -460,9 +476,8 @@ template <class T, class... Ts>
 typename std::enable_if<sizeof...(Ts) >= 2
   && detail::IsSomeString<
   typename std::remove_pointer<
-    typename std::tuple_element<
-      sizeof...(Ts) - 1, std::tuple<Ts...>
-      >::type>::type>::value>::type
+    typename detail::last_element<Ts...>::type
+  >::type>::value>::type
 toAppend(const T& v, const Ts&... vs) {
   toAppend(v, detail::getLastElement(vs...));
   toAppend(vs...);
@@ -500,9 +515,8 @@ template <class Delimiter, class T, class... Ts>
 typename std::enable_if<sizeof...(Ts) >= 2
   && detail::IsSomeString<
   typename std::remove_pointer<
-    typename std::tuple_element<
-      sizeof...(Ts) - 1, std::tuple<Ts...>
-      >::type>::type>::value>::type
+    typename detail::last_element<Ts...>::type
+  >::type>::value>::type
 toAppendDelim(const Delimiter& delim, const T& v, const Ts&... vs) {
   toAppend(v, delim, detail::getLastElement(vs...));
   toAppendDelim(delim, vs...);
@@ -862,10 +876,10 @@ to(StringPiece * src) {
     auto t = detail::digits_to<typename std::make_unsigned<Tgt>::type>(b, m);
     if (negative) {
       result = -t;
-      FOLLY_RANGE_CHECK(result <= 0, "Negative overflow");
+      FOLLY_RANGE_CHECK(is_non_positive(result), "Negative overflow");
     } else {
       result = t;
-      FOLLY_RANGE_CHECK(result >= 0, "Overflow");
+      FOLLY_RANGE_CHECK(is_non_negative(result), "Overflow");
     }
   }
   src->advance(m - src->data());

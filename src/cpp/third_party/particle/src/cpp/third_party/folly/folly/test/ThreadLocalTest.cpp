@@ -16,17 +16,25 @@
 
 #include "folly/ThreadLocal.h"
 
-#include <map>
-#include <unordered_map>
-#include <set>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <array>
 #include <atomic>
-#include <mutex>
+#include <chrono>
 #include <condition_variable>
+#include <map>
+#include <mutex>
+#include <set>
 #include <thread>
+#include <unordered_map>
+
 #include <boost/thread/tss.hpp>
-#include <gtest/gtest.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <gtest/gtest.h>
+
 #include "folly/Benchmark.h"
 
 using namespace folly;
@@ -293,6 +301,179 @@ TEST(ThreadLocal, Movable2) {
 
   // Make sure that we have 4 different instances of *tl
   EXPECT_EQ(4, tls.size());
+}
+
+namespace {
+
+constexpr size_t kFillObjectSize = 300;
+
+std::atomic<uint64_t> gDestroyed;
+
+/**
+ * Fill a chunk of memory with a unique-ish pattern that includes the thread id
+ * (so deleting one of these from another thread would cause a failure)
+ *
+ * Verify it explicitly and on destruction.
+ */
+class FillObject {
+ public:
+  explicit FillObject(uint64_t idx) : idx_(idx) {
+    uint64_t v = val();
+    for (size_t i = 0; i < kFillObjectSize; ++i) {
+      data_[i] = v;
+    }
+  }
+
+  void check() {
+    uint64_t v = val();
+    for (size_t i = 0; i < kFillObjectSize; ++i) {
+      CHECK_EQ(v, data_[i]);
+    }
+  }
+
+  ~FillObject() {
+    ++gDestroyed;
+  }
+
+ private:
+  uint64_t val() const {
+    return (idx_ << 40) | uint64_t(pthread_self());
+  }
+
+  uint64_t idx_;
+  uint64_t data_[kFillObjectSize];
+};
+
+}  // namespace
+
+#if FOLLY_HAVE_STD__THIS_THREAD__SLEEP_FOR
+TEST(ThreadLocal, Stress) {
+  constexpr size_t numFillObjects = 250;
+  std::array<ThreadLocalPtr<FillObject>, numFillObjects> objects;
+
+  constexpr size_t numThreads = 32;
+  constexpr size_t numReps = 20;
+
+  std::vector<std::thread> threads;
+  threads.reserve(numThreads);
+
+  for (size_t i = 0; i < numThreads; ++i) {
+    threads.emplace_back([&objects] {
+      for (size_t rep = 0; rep < numReps; ++rep) {
+        for (size_t i = 0; i < objects.size(); ++i) {
+          objects[i].reset(new FillObject(rep * objects.size() + i));
+          std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+        for (size_t i = 0; i < objects.size(); ++i) {
+          objects[i]->check();
+        }
+      }
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
+
+  EXPECT_EQ(numFillObjects * numThreads * numReps, gDestroyed);
+}
+#endif
+
+// Yes, threads and fork don't mix
+// (http://cppwisdom.quora.com/Why-threads-and-fork-dont-mix) but if you're
+// stupid or desperate enough to try, we shouldn't stand in your way.
+namespace {
+class HoldsOne {
+ public:
+  HoldsOne() : value_(1) { }
+  // Do an actual access to catch the buggy case where this == nullptr
+  int value() const { return value_; }
+ private:
+  int value_;
+};
+
+struct HoldsOneTag {};
+
+ThreadLocal<HoldsOne, HoldsOneTag> ptr;
+
+int totalValue() {
+  int value = 0;
+  for (auto& p : ptr.accessAllThreads()) {
+    value += p.value();
+  }
+  return value;
+}
+
+}  // namespace
+
+TEST(ThreadLocal, Fork) {
+  EXPECT_EQ(1, ptr->value());  // ensure created
+  EXPECT_EQ(1, totalValue());
+  // Spawn a new thread
+
+  std::mutex mutex;
+  bool started = false;
+  std::condition_variable startedCond;
+  bool stopped = false;
+  std::condition_variable stoppedCond;
+
+  std::thread t([&] () {
+    EXPECT_EQ(1, ptr->value());  // ensure created
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      started = true;
+      startedCond.notify_all();
+    }
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      while (!stopped) {
+        stoppedCond.wait(lock);
+      }
+    }
+  });
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    while (!started) {
+      startedCond.wait(lock);
+    }
+  }
+
+  EXPECT_EQ(2, totalValue());
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    // in child
+    int v = totalValue();
+
+    // exit successfully if v == 1 (one thread)
+    // diagnostic error code otherwise :)
+    switch (v) {
+    case 1: _exit(0);
+    case 0: _exit(1);
+    }
+    _exit(2);
+  } else if (pid > 0) {
+    // in parent
+    int status;
+    EXPECT_EQ(pid, waitpid(pid, &status, 0));
+    EXPECT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(0, WEXITSTATUS(status));
+  } else {
+    EXPECT_TRUE(false) << "fork failed";
+  }
+
+  EXPECT_EQ(2, totalValue());
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    stopped = true;
+    stoppedCond.notify_all();
+  }
+
+  t.join();
+
+  EXPECT_EQ(1, totalValue());
 }
 
 // Simple reference implementation using pthread_get_specific

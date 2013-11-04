@@ -27,7 +27,7 @@
 #include "folly/ConcurrentSkipList.h"
 #include "folly/Foreach.h"
 #include "folly/String.h"
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 DEFINE_int32(num_threads, 12, "num concurrent threads to test");
 
@@ -218,7 +218,7 @@ static std::string makeRandomeString(int len) {
 
 TEST(ConcurrentSkipList, TestStringType) {
   typedef folly::ConcurrentSkipList<std::string> SkipListT;
-  boost::shared_ptr<SkipListT> skip = SkipListT::createInstance();
+  std::shared_ptr<SkipListT> skip = SkipListT::createInstance();
   SkipListT::Accessor accessor(skip);
   {
     for (int i = 0; i < 100000; i++) {
