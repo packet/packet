@@ -38,7 +38,7 @@
       'sources': [
         'internal/channel.h',
         'internal/vector.h',
-        'internal/vector.cc',
+        'internal/vector_internal.cc',
         'channel.h',
         'packet.h',
         'vector.h',
