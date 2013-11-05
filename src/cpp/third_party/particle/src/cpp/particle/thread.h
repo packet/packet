@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, The Particle project authors.
+ * Copyright (C) 2012-2013, The Particle project authors.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 
 #include <thread>
 
-#include "cyrus/common/signals.h"
+#include "particle/signals.h"
 
 namespace particle {
 
@@ -42,7 +42,7 @@ namespace particle {
  * @return
  */
 template <typename Function>
-std::function<void()> make_cyrus_thread(Function func) {
+std::function<void()> make_particle_thread(Function func) {
   return [func] () mutable {  // NOLINT
       init_thread();
       func();

@@ -1,5 +1,5 @@
 /*
- * copyright (c) 2013, the cyrus project authors.
+ * Copyright (C) 2012-2013, The Particle project authors.
  *
  * this program is free software: you can redistribute it and/or modify
  * it under the terms of the gnu general public license as published by
