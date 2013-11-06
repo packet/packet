@@ -167,6 +167,7 @@ TEST(ChannelTest, ReadPackets) {
 
   dummy_channel->on_read(
       [&](const ChannelPtr& channel, const PacketPtr& packet) {
+        EXPECT_NE(uint64_t(0), packet->get_metadata());
         read_packet_count++;
         read_packet_size += packet->size();
       });

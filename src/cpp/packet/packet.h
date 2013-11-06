@@ -40,6 +40,8 @@ namespace packet {
 /** The base class of all packets. */
 class Packet {
  public:
+  typedef IoVector::MetaData MetaData;
+
   explicit Packet(const IoVector& io_vector) : vector(io_vector) {}
   explicit Packet(IoVector&& io_vector) : vector(std::move(io_vector)) {}
 
@@ -62,6 +64,10 @@ class Packet {
   IoVector* get_io_vector() {
     return &vector;
   }
+
+  MetaData get_metadata() const { return vector.get_metadata(); }
+
+  void set_metadata(MetaData md) { vector.set_metadata(md); }
 
  protected:
   IoVector vector;

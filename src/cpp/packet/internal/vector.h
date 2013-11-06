@@ -31,6 +31,7 @@
 #include <cstdlib>
 #include <cassert>
 
+#include <atomic>
 #include <memory>
 
 namespace packet {
@@ -41,6 +42,8 @@ namespace internal {
  */
 class IoVector final {
  public:
+  typedef uint64_t MetaData;
+
   /**
    * @param channel The packet channel that this IO vector is attached to.
    * @param size Buffer size. Must be more than 0.
@@ -50,7 +53,7 @@ class IoVector final {
   explicit IoVector(size_t size)
       : IoVector(static_cast<char *>(malloc(size)), size) {}
 
-  IoVector(char* buf, size_t size) : buf(buf), buf_size(size) {
+  IoVector(char* buf, size_t size) : buf(buf), buf_size(size), metadata(0) {
     assert(buf != nullptr);
   }
 
@@ -78,12 +81,24 @@ class IoVector final {
   /** IO vector's size. */
   size_t size() const { return buf_size; }
 
+  /** Returns the meta-data. */
+  MetaData get_metadata() const { return metadata.load(); }
+
+  /** Sets the meta-data. */
+  void set_metadata(MetaData metadata) { this->metadata.store(metadata); }
+
   static void memmove(IoVector* that, size_t to, const IoVector* self,
       size_t from, size_t size);
 
  private:
   char* buf;
   size_t buf_size;
+
+  /**
+   * Meta-data shared for this buffer. This usually stores an identifier for
+   * the source channel, but the user can also store other information.
+   */
+  std::atomic<MetaData> metadata;
 };
 
 template <typename... Args>

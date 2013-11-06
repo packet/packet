@@ -51,6 +51,7 @@ namespace packet {
 class IoVector final {
  public:
   typedef packet::internal::IoVector SharedIoVector;
+  typedef packet::internal::IoVector::MetaData MetaData;
   typedef std::shared_ptr<SharedIoVector> SharedIoVectorPtr;
   typedef std::shared_ptr<const SharedIoVector> ConstSharedIoVectorPtr;
 
@@ -150,6 +151,10 @@ class IoVector final {
     this->memmove(this, offset + gap_size, this, offset,
         consumed_size - offset);
   }
+
+  MetaData get_metadata() const { return shared_io_vector->get_metadata(); }
+
+  void set_metadata(MetaData md) { shared_io_vector->set_metadata(md); }
 
   static void memmove(IoVector* that, size_t to,
       const IoVector* self, size_t from, size_t size) {

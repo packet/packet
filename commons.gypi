@@ -26,6 +26,7 @@
     # Compilation flags.
     'common_cflags': [
       # '-fno-strict-aliasing',
+      '-Wno-unused-local-typedefs',
       '-Wall',
     ],
     'debug_cflags': ['-g', '-O0', '<@(common_cflags)'],

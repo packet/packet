@@ -53,6 +53,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   typedef std::shared_ptr<Channel> ChannelPtr;
   typedef std::shared_ptr<const Channel> ConstChannelPtr;
   typedef std::shared_ptr<const Packet> PacketPtr;
+  typedef std::uint64_t ChannelId;
 
   /**
    * Never use this constructor. It's just public because of std::make_shared.
@@ -153,6 +154,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
   void close() { uv_async_send(close_async); }
 
+  ChannelId get_id() const { return ChannelId(this); }
+
  private:
   static const size_t VECTOR_SIZE = 64 * 1024;
 
@@ -249,6 +252,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   /** Creates a new IO vector for future reads. */
   void reinitialize_vector() {
     auto new_io_vector = packet::internal::make_shared_io_vector(VECTOR_SIZE);
+    new_io_vector->set_metadata(get_id());
 
     if (unlikely(io_vector == nullptr)) {
       io_vector = new_io_vector;
@@ -256,6 +260,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
       written = 0;
       return;
     }
+
 
     auto remainder = written - consumed;
     packet::internal::IoVector::memmove(new_io_vector.get(), 0,
