@@ -81,7 +81,7 @@
 #include <inttypes.h>           // a third place for uint16_t or u_int16_t
 #endif
 
-#if 0
+#if 1
 #include <gflags/gflags.h>
 #endif
 
@@ -1081,7 +1081,7 @@ namespace base_logging {
 // LogMessage::LogStream is a std::ostream backed by this streambuf.
 // This class ignores overflow and leaves two bytes at the end of the
 // buffer to allow for a '\n' and '\0'.
-class LogStreamBuf : public std::streambuf {
+class GOOGLE_GLOG_DLL_DECL LogStreamBuf : public std::streambuf {
  public:
   // REQUIREMENTS: "len" must be >= 2 to account for the '\n' and '\n'.
   LogStreamBuf(char *buf, int len) {
@@ -1528,8 +1528,12 @@ extern GOOGLE_GLOG_DLL_DECL void SetLogger(LogSeverity level, Logger* logger);
 // be set to an empty string, if this function failed. This means, in most
 // cases, you do not need to check the error code and you can directly
 // use the value of "buf". It will never have an undefined value.
+// DEPRECATED: Use StrError(int) instead.
 GOOGLE_GLOG_DLL_DECL int posix_strerror_r(int err, char *buf, size_t len);
 
+// A thread-safe replacement for strerror(). Returns a string describing the
+// given POSIX error code.
+GOOGLE_GLOG_DLL_DECL std::string StrError(int err);
 
 // A class for which we define operator<<, which does nothing.
 class GOOGLE_GLOG_DLL_DECL NullStream : public LogMessage::LogStream {
