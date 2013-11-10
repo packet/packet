@@ -227,10 +227,10 @@ TEST(ChannelIntegration, ServerClose) {
   th_listener.join();
 }
 
-unique_ptr<DummyPacket> make_dummy_packet(uint8_t id) {
-  unique_ptr<DummyPacket> p(new DummyPacket());
-  p->set_size(DummyPacket::SIZE);
-  p->set_id(id);
+DummyPacket make_dummy_packet(uint8_t id) {
+  DummyPacket p;
+  p.set_size(DummyPacket::SIZE);
+  p.set_id(id);
   return p;
 }
 
@@ -388,19 +388,18 @@ using simple::SimpleParent;
 using simple::YetAnotherSimple;
 using simple::YetYetAnotherSimple;
 
-unique_ptr<YetAnotherSimple> make_yet_another_simple(int simples_count) {
-  auto container = unique_ptr<YetAnotherSimple>(new YetAnotherSimple(100));
+YetAnotherSimple make_yet_another_simple(int simples_count) {
+  YetAnotherSimple container(100);
   for (auto i = 0; i < simples_count; i++) {
-    container->add_simples(Simple());
+    container.add_simples(Simple());
   }
   return container;
 }
 
-unique_ptr<YetYetAnotherSimple> make_yetyet_another_simple(int a_count) {
-  auto container = unique_ptr<YetYetAnotherSimple>(
-      new YetYetAnotherSimple(100));
+YetYetAnotherSimple make_yetyet_another_simple(int a_count) {
+  YetYetAnotherSimple container(100);
   for (auto i = 0; i < a_count; i++) {
-    container->add_a(AnotherSimple(10));
+    container.add_a(AnotherSimple(10));
   }
   return container;
 }

@@ -62,8 +62,8 @@ class IoVector final {
   IoVector(IoVector&&) = default;
 
   // Not move/copy-assignable.
-  IoVector& operator=(const IoVector&) = delete;
-  IoVector& operator=(IoVector&&) = delete;
+  IoVector& operator=(const IoVector&) = default;
+  IoVector& operator=(IoVector&&) = default;
 
   /**
    * @return The allocated size for IO vector. This is always larger than or

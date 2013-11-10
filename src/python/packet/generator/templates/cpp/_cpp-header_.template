@@ -43,6 +43,9 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   ${self.copy_constructor_prototype(packet)} = default;
   ${self.move_constructor_prototype(packet)} = default;
 
+  ${self.copy_assign_prototype(packet)} = default;
+  ${self.move_assign_prototype(packet)} = default;
+
   virtual ~${cpp_class_name}();
 
   ${self.init_method_decl(packet)}

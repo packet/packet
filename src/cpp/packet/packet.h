@@ -48,8 +48,8 @@ class Packet {
   Packet(const Packet&) = default;
   Packet(Packet&&) = default;
 
-  Packet& operator=(const Packet&) = delete;
-  Packet& operator=(Packet&&) = delete;
+  Packet& operator=(const Packet&) = default;
+  Packet& operator=(Packet&&) = default;
 
   virtual ~Packet() {}
 

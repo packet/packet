@@ -109,6 +109,40 @@ namespace ${self.namespace_name(pom)} {\
   ${'static' if static and not qualified else ''} ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
 </%def>
 
+<%def name="copy_assign_prototype(packet)" buffered="True" filter="trim">
+  <%self:method_prototype qualified="${qualified}">
+    <%def name="return_type()" filter="trim">
+      ${self.class_name(packet)}&
+    </%def>
+    <%def name="method_name()" filter="trim">
+      operator=
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+       const ${self.class_name(packet)}&
+    </%def>
+  </%self:method_prototype>
+</%def>
+
+<%def name="move_assign_prototype(packet)" buffered="True" filter="trim">
+  <%self:method_prototype qualified="${qualified}">
+    <%def name="return_type()" filter="trim">
+      ${self.class_name(packet)}&
+    </%def>
+    <%def name="method_name()" filter="trim">
+      operator=
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+       ${self.class_name(packet)}&&
+    </%def>
+  </%self:method_prototype>
+</%def>
+
 <%def name="getter_name(field)" buffered="True" filter="trim">
   get_${field.name}
 </%def>

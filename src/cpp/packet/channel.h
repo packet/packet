@@ -143,8 +143,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
    * Writes a packet on the channel. Note: Channel will own the packet.
    * @param packet The packet.
    */
-  bool write(std::unique_ptr<Packet>&& packet) {
-    if (unlikely(!out_buffer.try_write(packet.release()))) {
+  bool write(Packet&& packet) {
+    if (unlikely(!out_buffer.try_write(packet))) {
       return false;
     }
 
@@ -194,12 +194,12 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
   void write_packets() {
     size_t buffer_size = std::min((size_t) IOV_MAX, out_buffer.guess_size());
-    auto packets = new std::vector<Packet*>();
+    auto packets = new std::vector<Packet>();
     packets->reserve(buffer_size);
 
     size_t consumed = 0;
+    Packet packet;
     for (; consumed < buffer_size; consumed++) {
-      Packet* packet;
       if (!out_buffer.try_read(&packet)) {
         break;
       }
@@ -215,8 +215,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
     uv_buf_t bufs[IOV_MAX];
     for (size_t j = 0; j < consumed; j++) {
-      bufs[j].base = (*packets)[j]->get_io_vector()->get_buf();
-      bufs[j].len = (*packets)[j]->size();
+      bufs[j].base = (*packets)[j].get_io_vector()->get_buf();
+      bufs[j].len = (*packets)[j].size();
     }
 
     auto channel_after_write_cb = [] (uv_write_t* req, int status) {
@@ -228,10 +228,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
         throw std::ios_base::failure("Write is not finished.");
       }
 
-      auto packets = static_cast<std::vector<Packet*>*>(req->data);
-      for (auto packet : *packets) {
-        delete packet;
-      }
+      auto packets = static_cast<std::vector<Packet>*>(req->data);
       delete packets;
       delete req;
     };
@@ -359,7 +356,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   PacketFactory<Packet> packet_factory;
 
   /** The buffer used for outgoing packets. */
-  particle::RingBuffer<Packet*> out_buffer;
+  particle::RingBuffer<Packet> out_buffer;
 
   // TODO(soheil): Write a light weight functor. We don't really need such a
   //               structure. Then explain why we didn't use std::fucntion,
