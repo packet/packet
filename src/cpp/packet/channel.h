@@ -198,7 +198,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     packets->reserve(buffer_size);
 
     size_t consumed = 0;
-    Packet packet;
+    Packet packet(make_io_vector(nullptr));
     for (; consumed < buffer_size; consumed++) {
       if (!out_buffer.try_read(&packet)) {
         break;
