@@ -166,6 +166,26 @@ class IoVector final {
     memmove(that, that->offset, self, self->offset, size);
   }
 
+  static void memmove(char* that, size_t to, const IoVector* self, size_t from,
+                      size_t size) {
+    packet::internal::IoVector::memmove(that, to, self->shared_io_vector.get(),
+                                        from, size);
+  }
+
+  static void memmove(char* that, const IoVector* self, size_t size) {
+    memmove(that, 0, self, self->offset, size);
+  }
+
+  static void memmove(IoVector* that, size_t to, const char* self, size_t from,
+                      size_t size) {
+    packet::internal::IoVector::memmove(that->shared_io_vector.get(), to, self,
+                                        from, size);
+  }
+
+  static void memmove(IoVector* that, const char* self, size_t size) {
+    memmove(that, that->offset, self, 0, size);
+  }
+
  private:
   /**
    * Creates a vector from shared vector.

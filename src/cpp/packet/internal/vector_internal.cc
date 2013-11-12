@@ -36,8 +36,8 @@
 namespace packet {
 namespace internal {
 
-void IoVector::memmove(IoVector* that, size_t to,
-    const IoVector* self, size_t from, size_t size) {
+void IoVector::memmove(IoVector* that, size_t to, const IoVector* self,
+                       size_t from, size_t size) {
   if (unlikely(size == 0)) {
     return;
   }
@@ -46,8 +46,18 @@ void IoVector::memmove(IoVector* that, size_t to,
     return;
   }
 
-  auto size_to_copy = std::min({ size, self->size() - from, that->size() - to});
+  auto size_to_copy = std::min({size, self->size() - from, that->size() - to});
   std::memmove(that->get_buf(to), self->get_buf(from), size_to_copy);
+}
+
+void IoVector::memmove(char* that, size_t to, const IoVector* self, size_t from,
+                       size_t size) {
+  std::memmove(that + to, self->get_buf(from), size);
+}
+
+void IoVector::memmove(IoVector* that, size_t to, const char* self, size_t from,
+                      size_t size) {
+  std::memmove(that->get_buf(to), self + from, size);
 }
 
 }  // namespace internal

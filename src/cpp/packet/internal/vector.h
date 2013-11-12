@@ -88,7 +88,13 @@ class IoVector final {
   void set_metadata(MetaData metadata) { this->metadata.store(metadata); }
 
   static void memmove(IoVector* that, size_t to, const IoVector* self,
-      size_t from, size_t size);
+                      size_t from, size_t size);
+
+  static void memmove(char* that, size_t to, const IoVector* self, size_t from,
+                      size_t size);
+
+  static void memmove(IoVector* that, size_t to, const char* self, size_t from,
+                      size_t size);
 
  private:
   char* buf;

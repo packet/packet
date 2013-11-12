@@ -76,27 +76,26 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     uv_tcp_init(loop, &stream);
 
     close_async->data = this;
-    uv_async_init(loop, close_async, [] (uv_async_t* async, int status) {
-          if (status) {
-            // FIXME(soheil): Log this.
-            return;
-          }
+    uv_async_init(loop, close_async, [](uv_async_t* async, int status) {
+      if (status) {
+        // FIXME(soheil): Log this.
+        return;
+      }
 
-          auto channel = static_cast<Channel*>(async->data);
-          channel->call_close_handler();
-          channel->close_stream();
-        });
+      auto channel = static_cast<Channel*>(async->data);
+      channel->do_close();
+    });
 
     write_async->data = this;
-    uv_async_init(loop, write_async, [] (uv_async_t* async, int status) {
-          if (status) {
-            // FIXME(soheil): Log this.
-            return;
-          }
+    uv_async_init(loop, write_async, [](uv_async_t* async, int status) {
+      if (status) {
+        // FIXME(soheil): Log this.
+        return;
+      }
 
-          auto channel = static_cast<Channel*>(async->data);
-          channel->write_packets();
-        });
+      auto channel = static_cast<Channel*>(async->data);
+      channel->write_packets();
+    });
   }
 
   ~Channel() {
@@ -158,6 +157,11 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
  private:
   static const size_t VECTOR_SIZE = 64 * 1024;
+
+  void do_close() {
+    call_close_handler();
+    close_stream();
+  }
 
   void close_stream() {
     if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream))) {
@@ -306,11 +310,11 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   }
 
   void call_error_handler() {
-    if (!error_handler) {
-      return;
+    if (error_handler) {
+      error_handler(self);
     }
 
-    error_handler(self);
+    do_close();
   }
 
   void call_read_handler(const PacketPtr& packet) {

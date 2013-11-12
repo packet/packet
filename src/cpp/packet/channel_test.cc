@@ -215,7 +215,6 @@ TEST(ChannelIntegration, ServerClose) {
         ChannelClient<DummyPacket> client(packet_factory);
         client.on_connect([&] (const ChannelPtr& channel) {
               channel->on_error([&](const ChannelPtr& channel) {
-                    channel->close();
                     client.stop();
                   });
             });
@@ -289,10 +288,6 @@ TEST(ChannelIntegration, PingPong) {
                     channel->write(make_dummy_packet(PONG_ID));
                   });
 
-              channel->on_error([&](const ChannelPtr& channel) {
-                    channel->close();
-                  });
-
               channel->on_close([&] (const ChannelPtr& channel) {
                     client.stop();
                   });
@@ -326,10 +321,6 @@ TEST(ChannelIntegration, ReliableMessaging) {
 
                     channel->write(make_dummy_packet(current_number));
                     current_number++;
-                  });
-
-              channel->on_error([&] (const ChannelPtr& channel) {
-                    channel->close();
                   });
 
               channel->on_close([&] (const ChannelPtr& channel) {
@@ -486,10 +477,6 @@ TEST(ChannelIntegration, PingPongGeneratedPackets) {
 
                     check_yetyet_another_simple(yy_simple);
                     channel->write(make_yetyet_another_simple(2));
-                  });
-
-              channel->on_error([&](const ChannelPtr& channel) {
-                    channel->close();
                   });
 
               channel->on_close([&] (const ChannelPtr& channel) {
