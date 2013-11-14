@@ -30,6 +30,8 @@
 
 #include <memory>
 
+#include "boost/intrusive_ptr.hpp"
+
 namespace packet {
 namespace internal {
 
@@ -37,7 +39,7 @@ class ChannelBase;
 class IoVector;
 
 template <typename... Args>
-std::shared_ptr<IoVector> make_shared_io_vector(Args... args);
+boost::intrusive_ptr<IoVector> make_shared_io_vector(Args... args);
 
 }  // namespace internal
 }  // namespace packet

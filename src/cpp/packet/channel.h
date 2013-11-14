@@ -49,7 +49,7 @@ namespace packet {
 template <typename Packet>
 class Channel : public std::enable_shared_from_this<Channel<Packet>> {
  public:
-  typedef std::shared_ptr<packet::internal::IoVector> SharedIoVector;
+  typedef boost::intrusive_ptr<packet::internal::IoVector> SharedIoVector;
   typedef std::shared_ptr<Channel> ChannelPtr;
   typedef std::shared_ptr<const Channel> ConstChannelPtr;
   typedef std::shared_ptr<const Packet> PacketPtr;

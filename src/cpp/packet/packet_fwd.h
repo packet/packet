@@ -28,6 +28,8 @@
 #ifndef CPP_PACKET_PACKET_FWD_H_
 #define CPP_PACKET_PACKET_FWD_H_
 
+#include "boost/intrusive_ptr.hpp"
+
 #include "packet/internal/packet_fwd.h"
 
 namespace packet {
@@ -46,7 +48,7 @@ std::shared_ptr<Packet> make_packet(size_t size);
 
 IoVector make_io_vector(size_t size);
 IoVector make_io_vector(
-    const std::shared_ptr<packet::internal::IoVector>& shared_io_vector);
+    const boost::intrusive_ptr<packet::internal::IoVector>& shared_io_vector);
 
 }  // namespace packet
 

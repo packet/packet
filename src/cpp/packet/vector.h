@@ -34,17 +34,18 @@
 #include <vector>
 
 #include "boost/format.hpp"
+#include "boost/intrusive_ptr.hpp"
 
 #include "gtest/gtest.h"
+
+#include "particle/branch.h"
+#include "particle/byteordering.h"
+#include "particle/type_traits.h"
 
 #include "packet/exceptions.h"
 #include "packet/internal/packet.h"
 #include "packet/internal/vector.h"
 #include "packet/packet_fwd.h"
-
-#include "particle/branch.h"
-#include "particle/byteordering.h"
-#include "particle/type_traits.h"
 
 namespace packet {
 
@@ -52,8 +53,8 @@ class IoVector final {
  public:
   typedef packet::internal::IoVector SharedIoVector;
   typedef packet::internal::IoVector::MetaData MetaData;
-  typedef std::shared_ptr<SharedIoVector> SharedIoVectorPtr;
-  typedef std::shared_ptr<const SharedIoVector> ConstSharedIoVectorPtr;
+  typedef boost::intrusive_ptr<SharedIoVector> SharedIoVectorPtr;
+  typedef boost::intrusive_ptr<const SharedIoVector> ConstSharedIoVectorPtr;
 
   ~IoVector() {}
 
@@ -286,7 +287,6 @@ class IoVector final {
   }
 
   SharedIoVectorPtr get_shared_vector() { return shared_io_vector; }
-  ConstSharedIoVectorPtr get_shared_vector() const { return shared_io_vector; }
 
   char* get_buf(size_t offset = 0) {
     return shared_io_vector->get_buf(this->offset + offset);
@@ -313,7 +313,7 @@ class IoVector final {
 };
 
 inline IoVector make_io_vector(
-    const std::shared_ptr<packet::internal::IoVector>& shared_io_vector) {
+    const boost::intrusive_ptr<packet::internal::IoVector>& shared_io_vector) {
   return IoVector(shared_io_vector);
 }
 

@@ -34,6 +34,10 @@
 #include <atomic>
 #include <memory>
 
+#include "boost/intrusive_ptr.hpp"
+
+#include "packet/internal/packet_fwd.h"
+
 namespace packet {
 namespace internal {
 
@@ -43,6 +47,7 @@ namespace internal {
 class IoVector final {
  public:
   typedef uint64_t MetaData;
+  typedef size_t RefCount;
 
   /**
    * @param channel The packet channel that this IO vector is attached to.
@@ -53,7 +58,8 @@ class IoVector final {
   explicit IoVector(size_t size)
       : IoVector(static_cast<char *>(malloc(size)), size) {}
 
-  IoVector(char* buf, size_t size) : buf(buf), buf_size(size), metadata(0) {
+  IoVector(char* buf, size_t size)
+      : buf(buf), buf_size(size), metadata(0), ref_count(0) {
     assert(buf != nullptr);
   }
 
@@ -105,11 +111,27 @@ class IoVector final {
    * the source channel, but the user can also store other information.
    */
   std::atomic<MetaData> metadata;
+
+  /** This is used by boost::intrusive_ptr. */
+  std::atomic<RefCount> ref_count;
+
+  friend void intrusive_ptr_add_ref(IoVector* vector);
+  friend void intrusive_ptr_release(IoVector* vector);
 };
 
+inline void intrusive_ptr_add_ref(packet::internal::IoVector* vector) {
+  ++(vector->ref_count);
+}
+
+inline void intrusive_ptr_release(packet::internal::IoVector* vector) {
+  if (--(vector->ref_count) == 0) {
+    delete vector;
+  }
+}
+
 template <typename... Args>
-std::shared_ptr<IoVector> make_shared_io_vector(Args... args) {
-  return std::make_shared<IoVector>(std::forward<Args>(args)...);
+boost::intrusive_ptr<IoVector> make_shared_io_vector(Args... args) {
+  return boost::intrusive_ptr<IoVector>(new IoVector(args...));
 }
 
 }  // namespace internal
