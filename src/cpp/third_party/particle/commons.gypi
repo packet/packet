@@ -23,6 +23,7 @@
 
     # Compilation flags.
     'common_cflags': [
+      '-Wno-unused-local-typedefs',
       '-Wall',
     ],
     'debug_cflags': ['-g', '-O0', '<@(common_cflags)'],
