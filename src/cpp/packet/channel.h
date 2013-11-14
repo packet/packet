@@ -176,10 +176,10 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
       return;
     }
 
-    uv_close(reinterpret_cast<uv_handle_t*>(&stream), [] (uv_handle_t* handle) {
-          auto channel = static_cast<Channel*>(handle->data);
-          channel->self.reset();
-        });
+    uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
+      auto channel = static_cast<Channel*>(handle->data);
+      channel->self.reset();
+    });
   }
 
   void read_packets(size_t size) {
@@ -548,18 +548,19 @@ class ChannelListener final : private packet::internal::UvLoop {
     server.data = this;
 
     stop_async.data = this;
-    uv_async_init(loop, &stop_async, [] (uv_async_t* async, int status) {
-          if (status) {
-            // FIXME(soheil): Log this.
-            return;
-          }
+    uv_async_init(loop, &stop_async, [](uv_async_t* async, int status) {
+      if (status) {
+        // FIXME(soheil): Log this.
+        return;
+      }
 
-          auto self = static_cast<ChannelListener*>(async->data);
-          self->stop_loop();
-        });
+      auto self = static_cast<ChannelListener*>(async->data);
+      self->stop_loop();
+    });
   }
 
   ~ChannelListener() {
+    uv_close(reinterpret_cast<uv_handle_t*>(&stop_async), nullptr);
     delete_loop();
   }
 
