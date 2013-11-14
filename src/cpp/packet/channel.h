@@ -82,7 +82,11 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
         return;
       }
 
-      auto channel = static_cast<Channel*>(async->data);
+      auto channel = static_cast<Channel*>(async->data)->self;
+      if (unlikely(channel == nullptr)) {
+        return;
+      }
+
       channel->do_close();
     });
 
@@ -93,7 +97,11 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
         return;
       }
 
-      auto channel = static_cast<Channel*>(async->data);
+      auto channel = static_cast<Channel*>(async->data)->self;
+      if (unlikely(channel == nullptr)) {
+        return;
+      }
+
       channel->write_packets();
     });
   }
@@ -290,7 +298,11 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   void start() {
     auto read_cb = [] (uv_stream_t* stream, ssize_t nread,
         const uv_buf_t* buf) {
-      auto channel = static_cast<Channel*>(stream->data);
+      auto channel = static_cast<Channel*>(stream->data)->self;
+      if (unlikely(channel == nullptr)) {
+        return;
+      }
+
       if (unlikely(nread < 0 || buf == nullptr || buf->base == nullptr ||
           buf->len == 0)) {
         channel->call_error_handler();
@@ -302,7 +314,11 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
     auto alloc_cb = [] (uv_handle_t* handle, size_t suggested_size,
         uv_buf_t* buf) {
-      auto channel = static_cast<Channel*>(handle->data);
+      auto channel = static_cast<Channel*>(handle->data)->self;
+      if (unlikely(channel == nullptr)) {
+        return;
+      }
+
       channel->allocate_uv_buf(suggested_size, buf);
     };
 
