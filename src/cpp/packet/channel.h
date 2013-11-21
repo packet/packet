@@ -36,6 +36,8 @@
 #include <string>
 #include <vector>
 
+#include "glog/logging.h"
+
 #include "third_party/libuv/include/uv.h"
 
 #include "particle/ringbuffer.h"
@@ -59,7 +61,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
    * Never use this constructor. It's just public because of std::make_shared.
    */
   explicit Channel(PacketFactory<Packet> packet_factory, uv_loop_t* loop,
-      size_t out_buf_size = 1024)
+                   size_t out_buf_size = 1024)
       : std::enable_shared_from_this<Channel>(),
         io_vector(nullptr),
         written(0),
@@ -77,11 +79,6 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
     close_async->data = this;
     uv_async_init(loop, close_async, [](uv_async_t* async, int status) {
-      if (status) {
-        // FIXME(soheil): Log this.
-        return;
-      }
-
       auto channel = static_cast<Channel*>(async->data)->self;
       if (unlikely(channel == nullptr)) {
         return;
@@ -92,11 +89,6 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
     write_async->data = this;
     uv_async_init(loop, write_async, [](uv_async_t* async, int status) {
-      if (status) {
-        // FIXME(soheil): Log this.
-        return;
-      }
-
       auto channel = static_cast<Channel*>(async->data)->self;
       if (unlikely(channel == nullptr)) {
         return;
@@ -231,13 +223,13 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
       bufs[j].len = (*packets)[j].size();
     }
 
-    auto channel_after_write_cb = [] (uv_write_t* req, int status) {
+    auto channel_after_write_cb = [](uv_write_t* req, int status) {
       if (status == UV_ECANCELED) {
-        return;
+        LOG(ERROR) << "Write cancelled";
       }
 
       if (status < 0) {
-        throw std::ios_base::failure("Write is not finished.");
+        LOG(ERROR) << "Error in write";
       }
 
       auto packets = static_cast<std::vector<Packet>*>(req->data);
@@ -247,7 +239,9 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
     if (uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,
         consumed, channel_after_write_cb)) {
-      throw std::ios_base::failure("Cannot write to the stream.");
+      LOG(ERROR) << "Error in write.\n";
+      delete packets;
+      delete write_req;
     }
   }
 
