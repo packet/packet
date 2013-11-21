@@ -80,7 +80,6 @@ class SignalMaster final {
    * block.
    */
   void cleanup() {
-    auto cleanup_handlers = this->cleanup_handlers;  // Safer to copy.
     for (auto handler : cleanup_handlers) {
       handler.second();
     }
