@@ -165,12 +165,12 @@ TEST(ChannelTest, ReadPackets) {
   size_t read_packet_count = 0;
   size_t read_packet_size = 0;
 
-  dummy_channel->on_read(
-      [&](const ChannelPtr& channel, const PacketPtr& packet) {
-        EXPECT_NE(uint64_t(0), packet->get_metadata());
-        read_packet_count++;
-        read_packet_size += packet->size();
-      });
+  dummy_channel->on_read([&](const ChannelPtr& channel,
+                             const PacketPtr& packet) {
+    EXPECT_NE(uint64_t(0), packet->get_metadata());
+    read_packet_count++;
+    read_packet_size += packet->size();
+  });
 
   dummy_channel->read_packets(buffer_size);
 
@@ -198,29 +198,27 @@ TEST(ChannelIntegration, ServerClose) {
 
   auto packet_factory = make_packet_factory<DummyPacket>();
 
-  auto th_listener = std::thread([&] () {
-        ChannelListener<DummyPacket> listener(packet_factory);
-        listener.on_accept([&] (const ChannelPtr& channel) {
-              channel->close();
-              listener.stop();
-            });
-        auto err = listener.listen(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
-      });
+  auto th_listener = std::thread([&]() {
+    ChannelListener<DummyPacket> listener(packet_factory);
+    listener.on_accept([&](const ChannelPtr& channel) {
+      channel->close();
+      listener.stop();
+    });
+    auto err = listener.listen(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+  });
 
-  auto th_client = std::thread([&] () {
-        std::chrono::milliseconds duration(2000);
-        std::this_thread::sleep_for(duration);
+  auto th_client = std::thread([&]() {
+    std::chrono::milliseconds duration(2000);
+    std::this_thread::sleep_for(duration);
 
-        ChannelClient<DummyPacket> client(packet_factory);
-        client.on_connect([&] (const ChannelPtr& channel) {
-              channel->on_error([&](const ChannelPtr& channel) {
-                    client.stop();
-                  });
-            });
-        auto err = client.connect_to(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
-      });
+    ChannelClient<DummyPacket> client(packet_factory);
+    client.on_connect([&](const ChannelPtr& channel) {
+      channel->on_error([&](const ChannelPtr& channel) { client.stop(); });
+    });
+    auto err = client.connect_to(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+  });
 
   th_client.join();
   th_listener.join();
@@ -243,60 +241,52 @@ TEST(ChannelIntegration, PingPong) {
 
   auto packet_factory = make_packet_factory<DummyPacket>();
 
-  auto th_listener = std::thread([&] () {
-        uint8_t current_id = PING_ID;
-        ChannelListener<DummyPacket> listener(packet_factory);
-        listener.on_accept([&] (const ChannelPtr& channel) {
-              channel->on_read(
-                  [&] (const ChannelPtr& channel, const PacketPtr& ping) {
-                    EXPECT_EQ(current_id, ping->get_id());
+  auto th_listener = std::thread([&]() {
+    uint8_t current_id = PING_ID;
+    ChannelListener<DummyPacket> listener(packet_factory);
+    listener.on_accept([&](const ChannelPtr& channel) {
+      channel->on_read([&](const ChannelPtr& channel, const PacketPtr& ping) {
+        EXPECT_EQ(current_id, ping->get_id());
 
-                    if (current_id == PONG_ID) {
-                      channel->close();
-                      return;
-                    }
-
-                    current_id = PONG_ID;
-                    channel->write(make_dummy_packet(PONG_ID));
-                  });
-
-              channel->on_error([&] (const ChannelPtr& channel) {
-                    EXPECT_TRUE(false);
-                  });
-
-              channel->on_close([&] (const ChannelPtr& channel) {
-                    listener.stop();
-                  });
-            });
-        auto err = listener.listen(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
-        if (err != CLOSED_ERR_CODE) {
-          printf("Listener error: %s\n", uv_strerror(err));
+        if (current_id == PONG_ID) {
+          channel->close();
+          return;
         }
+
+        current_id = PONG_ID;
+        channel->write(make_dummy_packet(PONG_ID));
       });
 
-  auto th_client = std::thread([&] () {
-        std::chrono::milliseconds duration(2000);
-        std::this_thread::sleep_for(duration);
+      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });
 
-        ChannelClient<DummyPacket> client(packet_factory);
-        client.on_connect([&] (const ChannelPtr& channel) {
-              channel->on_read(
-                  [&](const ChannelPtr& channel, const PacketPtr& pong) {
-                    EXPECT_EQ(PONG_ID, pong->get_id());
+      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });
+    });
+    auto err = listener.listen(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+    if (err != CLOSED_ERR_CODE) {
+      printf("Listener error: %s\n", uv_strerror(err));
+    }
+  });
 
-                    channel->write(make_dummy_packet(PONG_ID));
-                  });
+  auto th_client = std::thread([&]() {
+    std::chrono::milliseconds duration(2000);
+    std::this_thread::sleep_for(duration);
 
-              channel->on_close([&] (const ChannelPtr& channel) {
-                    client.stop();
-                  });
+    ChannelClient<DummyPacket> client(packet_factory);
+    client.on_connect([&](const ChannelPtr& channel) {
+      channel->on_read([&](const ChannelPtr& channel, const PacketPtr& pong) {
+        EXPECT_EQ(PONG_ID, pong->get_id());
 
-              channel->write(make_dummy_packet(PING_ID));
-            });
-        auto err = client.connect_to(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
+        channel->write(make_dummy_packet(PONG_ID));
       });
+
+      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });
+
+      channel->write(make_dummy_packet(PING_ID));
+    });
+    auto err = client.connect_to(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+  });
 
   th_client.join();
   th_listener.join();
@@ -310,64 +300,58 @@ TEST(ChannelIntegration, ReliableMessaging) {
 
   auto packet_factory = make_packet_factory<DummyPacket>();
 
-  auto th_listener = std::thread([&] () {
-        uint8_t current_number = 0;
+  auto th_listener = std::thread([&]() {
+    uint8_t current_number = 0;
 
-        ChannelListener<DummyPacket> listener(packet_factory);
-        listener.on_accept([&] (const ChannelPtr& channel) {
-              channel->on_read(
-                  [&] (const ChannelPtr& channel, const PacketPtr& message) {
-                    EXPECT_EQ(current_number, message->get_id());
+    ChannelListener<DummyPacket> listener(packet_factory);
+    listener.on_accept([&](const ChannelPtr& channel) {
+      channel->on_read([&](const ChannelPtr& channel,
+                           const PacketPtr& message) {
+        EXPECT_EQ(current_number, message->get_id());
 
-                    channel->write(make_dummy_packet(current_number));
-                    current_number++;
-                  });
+        channel->write(make_dummy_packet(current_number));
+        current_number++;
+      });
 
-              channel->on_close([&] (const ChannelPtr& channel) {
-                    listener.stop();
-                  });
-            });
-        auto err = listener.listen(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
-        if (err != CLOSED_ERR_CODE) {
-          printf("Listener error: %s\n", uv_strerror(err));
+      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });
+    });
+    auto err = listener.listen(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+    if (err != CLOSED_ERR_CODE) {
+      printf("Listener error: %s\n", uv_strerror(err));
+    }
+  });
+
+  auto th_client = std::thread([&]() {
+    std::chrono::milliseconds duration(2000);
+    std::this_thread::sleep_for(duration);
+
+    uint8_t current_number = 0;
+
+    ChannelClient<DummyPacket> client(packet_factory);
+    client.on_connect([&](const ChannelPtr& channel) {
+      channel->on_read([&](const ChannelPtr& channel,
+                           const PacketPtr& message) {
+        EXPECT_EQ(current_number, message->get_id());
+
+        if (current_number == MAX_ID) {
+          channel->close();
+          return;
         }
+
+        current_number++;
+        channel->write(make_dummy_packet(current_number));
       });
 
-  auto th_client = std::thread([&] () {
-        std::chrono::milliseconds duration(2000);
-        std::this_thread::sleep_for(duration);
+      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });
 
-        uint8_t current_number = 0;
+      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });
 
-        ChannelClient<DummyPacket> client(packet_factory);
-        client.on_connect([&] (const ChannelPtr& channel) {
-              channel->on_read(
-                  [&](const ChannelPtr& channel, const PacketPtr& message) {
-                    EXPECT_EQ(current_number, message->get_id());
-
-                    if (current_number == MAX_ID) {
-                      channel->close();
-                      return;
-                    }
-
-                    current_number++;
-                    channel->write(make_dummy_packet(current_number));
-                  });
-
-              channel->on_error([&](const ChannelPtr& channel) {
-                    EXPECT_TRUE(false);
-                  });
-
-              channel->on_close([&] (const ChannelPtr& channel) {
-                    client.stop();
-                  });
-
-              channel->write(make_dummy_packet(current_number));
-            });
-        auto err = client.connect_to(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
-      });
+      channel->write(make_dummy_packet(current_number));
+    });
+    auto err = client.connect_to(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+  });
 
   th_client.join();
   th_listener.join();
@@ -425,69 +409,62 @@ TEST(ChannelIntegration, PingPongGeneratedPackets) {
 
   auto packet_factory = make_packet_factory<SimpleParent>();
 
-  auto th_listener = std::thread([&] () {
-        ChannelListener<SimpleParent> listener(packet_factory);
-        listener.on_accept([&] (const ChannelPtr& channel) {
-              channel->on_read(
-                  [&] (const ChannelPtr& channel, const SimplePacketPtr& pkt) {
-                    auto const y_simple =
-                        dynamic_pointer_cast<const YetAnotherSimple>(pkt);
-                    auto const yy_simple =
-                        dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
+  auto th_listener = std::thread([&]() {
+    ChannelListener<SimpleParent> listener(packet_factory);
+    listener.on_accept([&](const ChannelPtr& channel) {
+      channel->on_read([&](const ChannelPtr& channel,
+                           const SimplePacketPtr& pkt) {
+        auto const y_simple = dynamic_pointer_cast<const YetAnotherSimple>(pkt);
+        auto const yy_simple =
+            dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
 
-                    auto is_pong = yy_simple != nullptr;
+        auto is_pong = yy_simple != nullptr;
 
-                    if (is_pong) {
-                      check_yetyet_another_simple(yy_simple);
-                      channel->close();
-                      return;
-                    }
-
-                    check_yet_another_simple(y_simple);
-                    channel->write(make_yetyet_another_simple(2));
-                  });
-
-              channel->on_error([&] (const ChannelPtr& channel) {
-                    EXPECT_TRUE(false);
-                  });
-
-              channel->on_close([&] (const ChannelPtr& channel) {
-                    listener.stop();
-                  });
-            });
-        auto err = listener.listen(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
-        if (err != CLOSED_ERR_CODE) {
-          printf("Listener error: %s\n", uv_strerror(err));
+        if (is_pong) {
+          check_yetyet_another_simple(yy_simple);
+          channel->close();
+          return;
         }
+
+        check_yet_another_simple(y_simple);
+        channel->write(make_yetyet_another_simple(2));
       });
 
-  auto th_client = std::thread([&] () {
-        std::chrono::milliseconds duration(2000);
-        std::this_thread::sleep_for(duration);
+      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });
 
-        ChannelClient<SimpleParent> client(packet_factory);
-        client.on_connect([&] (const ChannelPtr& channel) {
-              channel->on_read(
-                  [&](const ChannelPtr& channel, const SimplePacketPtr& pkt) {
-                    auto const yy_simple =
-                        dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
+      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });
+    });
+    auto err = listener.listen(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+    if (err != CLOSED_ERR_CODE) {
+      printf("Listener error: %s\n", uv_strerror(err));
+    }
+  });
 
-                    ASSERT_NE(nullptr, yy_simple);
+  auto th_client = std::thread([&]() {
+    std::chrono::milliseconds duration(2000);
+    std::this_thread::sleep_for(duration);
 
-                    check_yetyet_another_simple(yy_simple);
-                    channel->write(make_yetyet_another_simple(2));
-                  });
+    ChannelClient<SimpleParent> client(packet_factory);
+    client.on_connect([&](const ChannelPtr& channel) {
+      channel->on_read([&](const ChannelPtr& channel,
+                           const SimplePacketPtr& pkt) {
+        auto const yy_simple =
+            dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
 
-              channel->on_close([&] (const ChannelPtr& channel) {
-                    client.stop();
-                  });
+        ASSERT_NE(nullptr, yy_simple);
 
-              channel->write(make_yet_another_simple(2));
-            });
-        auto err = client.connect_to(HOST, PORT);
-        EXPECT_EQ(CLOSED_ERR_CODE, err);
+        check_yetyet_another_simple(yy_simple);
+        channel->write(make_yetyet_another_simple(2));
       });
+
+      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });
+
+      channel->write(make_yet_another_simple(2));
+    });
+    auto err = client.connect_to(HOST, PORT);
+    EXPECT_EQ(CLOSED_ERR_CODE, err);
+  });
 
   th_client.join();
   th_listener.join();
