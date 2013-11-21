@@ -31,7 +31,9 @@
 #include <sys/socket.h>
 
 #include "third_party/libuv/include/uv.h"
+
 #include "particle/memory.h"
+#include "particle/branch.h"
 
 #include "packet/internal/packet_fwd.h"
 
@@ -48,8 +50,8 @@ class UvLoop {
 
  protected:
   /** Starts the loop. */
-  int start_loop() noexcept {
-    return uv_run(loop, UV_RUN_DEFAULT);
+  int start_loop(uv_run_mode mode = UV_RUN_DEFAULT) noexcept {
+    return uv_run(loop, mode);
   }
 
   /**
@@ -60,13 +62,31 @@ class UvLoop {
     return uv_stop(loop);
   }
 
-  /** Must be called on destructor of inherited classes. */
+  /**
+   * Must be called on destructor of inherited classes. Must be called when the
+   * loop is stopped;
+   */
   void delete_loop() noexcept {
     // Calls all close handlers.
     // TODO(soheil): submit a patch for this to libuv.
-    uv_run(loop, UV_RUN_NOWAIT);
+    disable_all_streams();
+    start_loop(UV_RUN_NOWAIT);
 
     uv_loop_delete(loop);
+  }
+
+  void disable_all_streams() {
+    auto walk_cb = [](uv_handle_t* handle, void* arg) {
+      if (unlikely(handle == nullptr)) {
+        return;
+      }
+
+      if (handle->type == UV_TCP) {
+        uv_read_stop(reinterpret_cast<uv_stream_t*>(handle));
+      }
+    };
+
+    uv_walk(loop, walk_cb, nullptr);
   }
 
   uv_loop_t* loop;
