@@ -36,6 +36,8 @@
 
 #include "boost/intrusive_ptr.hpp"
 
+#include "gtest/gtest.h"
+
 #include "packet/internal/packet_fwd.h"
 
 namespace packet {
@@ -93,6 +95,16 @@ class IoVector final {
   /** Sets the meta-data. */
   void set_metadata(MetaData metadata) { this->metadata.store(metadata); }
 
+  /** Adds to the reference count. */
+  RefCount add_ref(RefCount diff = 1) {
+    return ref_count.fetch_add(diff) + diff;
+  }
+
+  /** Subtracts from the reference count. */
+  RefCount release(RefCount diff = 1) {
+    return ref_count.fetch_sub(diff) - diff;
+  }
+
   static void memmove(IoVector* that, size_t to, const IoVector* self,
                       size_t from, size_t size);
 
@@ -117,14 +129,16 @@ class IoVector final {
 
   friend void intrusive_ptr_add_ref(IoVector* vector);
   friend void intrusive_ptr_release(IoVector* vector);
+
+  FRIEND_TEST(IoVector, ThreadSafety);
 };
 
 inline void intrusive_ptr_add_ref(packet::internal::IoVector* vector) {
-  ++(vector->ref_count);
+  vector->add_ref();
 }
 
 inline void intrusive_ptr_release(packet::internal::IoVector* vector) {
-  if (--(vector->ref_count) == 0) {
+  if (vector->release() == 0) {
     delete vector;
   }
 }
