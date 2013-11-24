@@ -18,7 +18,7 @@ for l in $(ls libs/); do
   fi
 done
 
-REQUIRED_LIBS=('$smart_ptr$', '$filesystem$', '$system$')
+REQUIRED_LIBS=('$smart_ptr$', '$filesystem$', '$system$', '$thread')
 
 for l in $(ls libs/); do
   if [[ ${REQUIRED_LIBS[*]} =~ "\$$l\$" ]]; then

@@ -77,6 +77,7 @@
       'target_name': 'particle_unittests',
       'type': 'executable',
       'dependencies': [
+        '<@(particle_third_party_dir)/boost.gyp:boost_thread',
         '<@(particle_third_party_dir)/gtest.gyp:gtest_main',
         '<@(particle_third_party_dir)/gmock.gyp:gmock',
         'headers',
@@ -84,6 +85,7 @@
       ],
       'sources': [
         'bithacks_test.cc',
+        'boost_test.cc',
         'memory_test.cc',
         'ringbuffer_test.cc',
         'typename_test.cc',
