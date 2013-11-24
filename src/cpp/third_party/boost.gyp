@@ -54,6 +54,22 @@
       ],
     },
     {
+      'target_name': 'boost_thread',
+      'type': '<(library)',
+      'dependencies': [
+        ':boost_common',
+        ':boost_system',
+      ],
+      'sources': [
+        '<(boost_home)/libs/thread/src/future.cpp',
+        '<(boost_home)/libs/thread/src/tss_null.cpp',
+        '<(boost_home)/libs/thread/src/pthread/once.cpp',
+        '<(boost_home)/libs/thread/src/pthread/once_atomic.cpp',
+        '<(boost_home)/libs/thread/src/pthread/thread.cpp',
+        '<(boost_home)/libs/thread/src/pthread/timeconv.inl',
+      ],
+    },
+    {
       'target_name': 'boost_fs',
       'type': '<(library)',
       'include_dirs': [
