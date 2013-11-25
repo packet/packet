@@ -95,7 +95,7 @@ class CppTyping(object):
       if repeated_info.count:
         cpp_type = 'std::array<%s, %d>' % (cpp_type, repeated_info.count)
       else:
-        cpp_type = 'std::vector<std::shared_ptr<%s>>' % cpp_type
+        cpp_type = 'std::vector<%s>' % cpp_type
 
     # TODO(soheil): Maybe create an enum?
     if variant == TYPE_VARIANTS.POINTER:

@@ -179,26 +179,5 @@ ${self.static_size_prototype(packet, qualified=True)} {
 % endfor
 </%block>
 <%block name="footer">
-% for packet in reversed(pom.packets.values()):
-<%
-  cpp_class_name = self.class_name(packet, qualified=True)
-%>\
-
-namespace packet {
-
-template<>
-std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const packet::IoVector& io_vec) {
-  % for p in packet.children:
-  if (${self.type_selector_cond(p)}) {
-    return make_packet<${self.class_name(p, qualified=True)}>(io_vec);
-  }
-  % endfor
-  return ::std::make_shared<${cpp_class_name}>(io_vec);
-}
-
-}  // namespace packet
-
-% endfor
-
 </%block>
 

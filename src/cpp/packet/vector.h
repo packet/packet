@@ -86,28 +86,28 @@ class IoVector final {
 
   template <typename Data, bool is_big_endian = false>
   typename ::std::enable_if<std::is_base_of<Packet, Data>::value,
-      std::vector<std::shared_ptr<Data>>>::type  // NOLINT
-  read_repeated_data(size_t offset = 0, size_t count = 0, size_t size = 0)
-      const {
-    std::vector<std::shared_ptr<Data>> result;
-    foreach_repeated_data<Data>(offset, count, size,
+                            std::vector<Data>>::type  // NOLINT
+      read_repeated_data(size_t offset = 0, size_t count = 0,
+                         size_t size = 0) const {
+    std::vector<Data> result;
+    foreach_repeated_data<Data>(
+        offset, count, size,
         [&result](const IoVector& vec, size_t element_size) {
           result.push_back(make_packet<Data>(vec));
         });
     return result;
   }
 
-  // TODO(soheil): Do we really need a shared_ptr here?
   template <typename Data, bool is_big_endian = false>
   typename ::std::enable_if<std::is_integral<Data>::value,
-      std::vector<std::shared_ptr<Data>>>::type  // NOLINT
-  read_repeated_data(size_t offset = 0, size_t count = 0, size_t size = 0)\
-      const {
-    std::vector<std::shared_ptr<Data>> result;
-    foreach_repeated_data<Data>(offset, count, size,
+                            std::vector<Data>>::type  // NOLINT
+      read_repeated_data(size_t offset = 0, size_t count = 0,
+                         size_t size = 0) const {
+    std::vector<Data> result;
+    foreach_repeated_data<Data>(
+        offset, count, size,
         [&result](const IoVector& vec, size_t element_size) {
-          result.push_back(std::make_shared<Data>(
-              vec.read_data<Data, is_big_endian>(0)));
+          result.push_back(vec.read_data<Data, is_big_endian>(0));
         });
     return result;
   }
@@ -200,7 +200,7 @@ class IoVector final {
   do_read_data(size_t offset) const {
     IoVector new_vec(*this);
     new_vec.consume(offset);
-    return *make_packet<Data>(new_vec);
+    return make_packet<Data>(new_vec);
   }
 
   template <typename Data, bool is_big_endian>

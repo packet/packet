@@ -118,7 +118,7 @@ TEST(PacketGeneratorTest, PacketSize) {
   EXPECT_EQ(static_cast<size_t>(1), simple::Simple::size_(io_vector));
 
   auto s = make_packet<simple::Simple>(io_vector);
-  EXPECT_EQ(static_cast<uint8_t>(1), s->get_x());
+  EXPECT_EQ(static_cast<uint8_t>(1), s.get_x());
 }
 
 TEST(PacketGeneratorTest, MakePacket) {
@@ -128,10 +128,9 @@ TEST(PacketGeneratorTest, MakePacket) {
   EXPECT_EQ(static_cast<uint8_t>(1), io_vector.read_data<uint8_t>(0));
   EXPECT_EQ(static_cast<uint8_t>(2), io_vector.read_data<uint8_t>(1));
   auto inc_p = make_packet<including::AnotherIncluding>(io_vector);
-  ASSERT_TRUE(inc_p != nullptr);
-  EXPECT_EQ(1, inc_p->get_c());
-  EXPECT_EQ(2, inc_p->get_l());
-  auto arr = inc_p->get_arr();
+  EXPECT_EQ(1, inc_p.get_c());
+  EXPECT_EQ(2, inc_p.get_l());
+  auto arr = inc_p.get_arr();
   EXPECT_EQ(2, arr[0]);
   EXPECT_EQ(3, arr[1]);
 }
@@ -144,10 +143,9 @@ TEST(PacketGeneratorTest, MakePacketPolymorphic) {
   EXPECT_EQ(static_cast<uint8_t>(2), io_vector.read_data<uint8_t>(0));
   EXPECT_EQ(static_cast<uint8_t>(3), io_vector.read_data<uint8_t>(1));
   auto sp = make_packet<simple::SimpleParent>(io_vector);
-  EXPECT_EQ(static_cast<uint8_t>(3), sp->get_l());
-  auto i = std::dynamic_pointer_cast<including::Including>(sp);
-  ASSERT_TRUE(i != nullptr);
-  auto s_in_i = i->get_s();
+  EXPECT_EQ(static_cast<uint8_t>(3), sp.get_l());
+  auto i = including::cast_to_Including(sp);
+  auto s_in_i = i.get_s();
   EXPECT_EQ(static_cast<uint8_t>(1), s_in_i.size());
 }
 

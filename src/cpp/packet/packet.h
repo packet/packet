@@ -74,21 +74,24 @@ class Packet {
 };
 
 template <typename Packet>
-std::shared_ptr<Packet> make_packet(const IoVector& io_vec) {
-  auto packet = std::make_shared<Packet>(io_vec);
-  return packet;
+Packet make_packet(const IoVector& io_vec) {
+  return Packet(io_vec);
 }
 
 template <typename Packet>
-std::shared_ptr<Packet> make_packet(size_t size) {
-  return make_packet<Packet>(make_io_vector(size));
+Packet make_packet(size_t size) {
+  return Packet(make_io_vector(size));
+}
+
+template <typename Packet, typename ThatPacket>
+Packet make_packet(const ThatPacket& packet) {
+  return Packet(*packet.get_io_vector());
 }
 
 template <typename Packet>
 class PacketFactory final {
  public:
-  typedef std::shared_ptr<Packet> PacketPtr;
-  typedef std::vector<PacketPtr> PacketVector;
+  typedef std::vector<Packet> PacketVector;
 
   void read_packets(IoVector io_vec, size_t data_size,
       PacketVector* packets, size_t* consumed) {

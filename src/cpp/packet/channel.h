@@ -57,7 +57,6 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   typedef boost::intrusive_ptr<packet::internal::IoVector> SharedIoVector;
   typedef std::shared_ptr<Channel> ChannelPtr;
   typedef std::shared_ptr<const Channel> ConstChannelPtr;
-  typedef std::shared_ptr<const Packet> PacketPtr;
   typedef std::uint64_t ChannelId;
 
   /**
@@ -122,7 +121,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
    * @param read_handler The read handler.
    */
   void on_read(
-      std::function<void(const ChannelPtr&, const PacketPtr&)> read_handler) {
+      std::function<void(const ChannelPtr&, const Packet&)> read_handler) {
     this->read_handler = read_handler;
   }
 
@@ -199,7 +198,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     assert(io_vector->size() >= written);
 
     IoVector io_vector(this->io_vector, this->consumed);
-    std::vector<std::shared_ptr<Packet>> packets;
+    std::vector<Packet> packets;
     size_t consumed = 0;
 
     packet_factory.read_packets(io_vector, size, &packets, &consumed);
@@ -348,7 +347,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     do_close();
   }
 
-  void call_read_handler(const PacketPtr& packet) {
+  void call_read_handler(const Packet& packet) {
     if (!read_handler) {
       return;
     }
@@ -396,7 +395,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   // TODO(soheil): Write a light weight functor. We don't really need such a
   //               structure. Then explain why we didn't use std::fucntion,
   //               here.
-  std::function<void(const ChannelPtr&, const PacketPtr&)> read_handler;
+  std::function<void(const ChannelPtr&, const Packet&)> read_handler;
   std::function<void(const ChannelPtr&)> error_handler;
   std::function<void(const ChannelPtr&)> close_handler;
 

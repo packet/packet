@@ -75,6 +75,19 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   const static size_t MIN_SIZE = ${packet.min_size};
 };
 
+% if packet.parent:
+
+inline ${self.is_child_prototype(packet)} {
+  return ${self.type_selector_cond(packet, var_name='parent')};
+}
+
+inline ${self.cast_to_child_prototype(packet)} {
+  assert(${self.is_child_method_name(packet)}(parent));
+  return packet::make_packet<${self.class_name(packet)}>(parent);
+}
+
+% endif
+
 % endfor
 </%block>
 <%block name="footer">
@@ -82,14 +95,6 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 <%
   cpp_class_name = self.class_name(packet, qualified=True)
 %>\
-
-namespace packet {
-
-template<>
-std::shared_ptr<${cpp_class_name}> make_packet<${cpp_class_name}>(const
-    packet::IoVector& io_vec);
-
-}  // namespace packet
 
 % endfor
 

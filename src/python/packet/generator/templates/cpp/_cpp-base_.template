@@ -352,6 +352,47 @@ namespace ${self.namespace_name(pom)} {\
   </%self:method_prototype>
 </%def>
 
+<%def name="is_child_method_name(packet)" buffered="True" filter="trim">
+  is_${packet.name}
+</%def>
+
+<%def name="is_child_prototype(packet)" buffered="True" filter="trim">
+  <%self:method_prototype>
+    <%def name="return_type()" filter="trim">
+      bool
+    </%def>
+    <%def name="method_name()" filter="trim">
+      ${self.is_child_method_name(packet)}
+    </%def>
+    <%def name="class_name()" filter="trim">
+    </%def>
+    <%def name="args()" filter="trim">
+      const ${self.class_name(packet.parent, qualified=True)}& parent
+    </%def>
+  </%self:method_prototype>
+</%def>
+
+<%def name="cast_to_child_method_name(packet)" buffered="True" filter="trim">
+  cast_to_${packet.name}
+</%def>
+
+<%def name="cast_to_child_prototype(packet, qualified=False)" buffered="True"
+    filter="trim">
+  <%self:method_prototype>
+    <%def name="return_type()" filter="trim">
+     ${self.class_name(packet, qualified=True)}
+    </%def>
+    <%def name="method_name()" filter="trim">
+      ${self.cast_to_child_method_name(packet)}
+    </%def>
+    <%def name="class_name()" filter="trim">
+    </%def>
+    <%def name="args()" filter="trim">
+      const ${self.class_name(packet.parent, qualified=True)}& parent
+    </%def>
+  </%self:method_prototype>
+</%def>
+
 <%def name="type_selector_cond(packet, var_name=None, is_pointer=False)" buffered="True" filter="trim">
   <%
     conditions = packet.get_type_selector_condition()

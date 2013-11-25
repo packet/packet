@@ -40,7 +40,6 @@
 
 namespace packet {
 
-using std::dynamic_pointer_cast;
 using std::shared_ptr;
 using std::unique_ptr;
 
@@ -74,7 +73,6 @@ class DummyPacket : public Packet {
 };
 
 typedef shared_ptr<Channel<DummyPacket>> ChannelPtr;
-typedef shared_ptr<const DummyPacket> PacketPtr;
 
 template <typename Channel>
 void dispose_channel(const shared_ptr<Channel>& channel) {
@@ -166,10 +164,10 @@ TEST(ChannelTest, ReadPackets) {
   size_t read_packet_size = 0;
 
   dummy_channel->on_read([&](const ChannelPtr& channel,
-                             const PacketPtr& packet) {
-    EXPECT_NE(uint64_t(0), packet->get_metadata());
+                             const DummyPacket& packet) {
+    EXPECT_NE(uint64_t(0), packet.get_metadata());
     read_packet_count++;
-    read_packet_size += packet->size();
+    read_packet_size += packet.size();
   });
 
   dummy_channel->read_packets(buffer_size);
@@ -214,7 +212,7 @@ TEST(ChannelIntegration, ServerClose) {
 
     ChannelClient<DummyPacket> client(packet_factory);
     client.on_connect([&](const ChannelPtr& channel) {
-      channel->on_error([&](const ChannelPtr& channel) { client.stop(); });
+      channel->on_error([&](const ChannelPtr& channel) { client.stop(); });  // NOLINT
     });
     auto err = client.connect_to(HOST, PORT);
     EXPECT_EQ(CLOSED_ERR_CODE, err);
@@ -245,8 +243,8 @@ TEST(ChannelIntegration, PingPong) {
     uint8_t current_id = PING_ID;
     ChannelListener<DummyPacket> listener(packet_factory);
     listener.on_accept([&](const ChannelPtr& channel) {
-      channel->on_read([&](const ChannelPtr& channel, const PacketPtr& ping) {
-        EXPECT_EQ(current_id, ping->get_id());
+      channel->on_read([&](const ChannelPtr& channel, const DummyPacket& ping) {
+        EXPECT_EQ(current_id, ping.get_id());
 
         if (current_id == PONG_ID) {
           channel->close();
@@ -257,9 +255,9 @@ TEST(ChannelIntegration, PingPong) {
         channel->write(make_dummy_packet(PONG_ID));
       });
 
-      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });
+      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });  // NOLINT
 
-      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });
+      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });  // NOLINT
     });
     auto err = listener.listen(HOST, PORT);
     EXPECT_EQ(CLOSED_ERR_CODE, err);
@@ -274,13 +272,13 @@ TEST(ChannelIntegration, PingPong) {
 
     ChannelClient<DummyPacket> client(packet_factory);
     client.on_connect([&](const ChannelPtr& channel) {
-      channel->on_read([&](const ChannelPtr& channel, const PacketPtr& pong) {
-        EXPECT_EQ(PONG_ID, pong->get_id());
+      channel->on_read([&](const ChannelPtr& channel, const DummyPacket& pong) {
+        EXPECT_EQ(PONG_ID, pong.get_id());
 
         channel->write(make_dummy_packet(PONG_ID));
       });
 
-      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });
+      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });  // NOLINT
 
       channel->write(make_dummy_packet(PING_ID));
     });
@@ -306,14 +304,14 @@ TEST(ChannelIntegration, ReliableMessaging) {
     ChannelListener<DummyPacket> listener(packet_factory);
     listener.on_accept([&](const ChannelPtr& channel) {
       channel->on_read([&](const ChannelPtr& channel,
-                           const PacketPtr& message) {
-        EXPECT_EQ(current_number, message->get_id());
+                           const DummyPacket& message) {
+        EXPECT_EQ(current_number, message.get_id());
 
         channel->write(make_dummy_packet(current_number));
         current_number++;
       });
 
-      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });
+      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });  // NOLINT
     });
     auto err = listener.listen(HOST, PORT);
     EXPECT_EQ(CLOSED_ERR_CODE, err);
@@ -331,8 +329,8 @@ TEST(ChannelIntegration, ReliableMessaging) {
     ChannelClient<DummyPacket> client(packet_factory);
     client.on_connect([&](const ChannelPtr& channel) {
       channel->on_read([&](const ChannelPtr& channel,
-                           const PacketPtr& message) {
-        EXPECT_EQ(current_number, message->get_id());
+                           const DummyPacket& message) {
+        EXPECT_EQ(current_number, message.get_id());
 
         if (current_number == MAX_ID) {
           channel->close();
@@ -343,9 +341,9 @@ TEST(ChannelIntegration, ReliableMessaging) {
         channel->write(make_dummy_packet(current_number));
       });
 
-      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });
+      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });  // NOLINT
 
-      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });
+      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });  // NOLINT
 
       channel->write(make_dummy_packet(current_number));
     });
@@ -379,29 +377,23 @@ YetYetAnotherSimple make_yetyet_another_simple(int a_count) {
   return container;
 }
 
-void check_yet_another_simple(const shared_ptr<const YetAnotherSimple>& pkt) {
-  ASSERT_NE(nullptr, pkt);
+void check_yet_another_simple(const YetAnotherSimple& pkt) {
+  EXPECT_NE(0, pkt.get_s());
+  EXPECT_EQ(size_t(pkt.get_s()), pkt.get_simples().size());
 
-  EXPECT_NE(0, pkt->get_s());
-  EXPECT_EQ(size_t(pkt->get_s()), pkt->get_simples().size());
-
-  for (auto& simple : pkt->get_simples()) {
-    EXPECT_EQ(uint8_t(1), simple->get_x());
+  for (auto& simple : pkt.get_simples()) {
+    EXPECT_EQ(uint8_t(1), simple.get_x());
   }
 }
 
-void check_yetyet_another_simple(
-    const shared_ptr<const YetYetAnotherSimple>& pkt) {
-  ASSERT_NE(nullptr, pkt);
-
-  EXPECT_NE(0, pkt->get_s());
-  EXPECT_EQ(size_t(pkt->get_s() / 3), pkt->get_a().size());
+void check_yetyet_another_simple(const YetYetAnotherSimple& pkt) {
+  EXPECT_NE(0, pkt.get_s());
+  EXPECT_EQ(size_t(pkt.get_s() / 3), pkt.get_a().size());
 }
 
 
 TEST(ChannelIntegration, PingPongGeneratedPackets) {
   typedef shared_ptr<Channel<SimpleParent>> ChannelPtr;
-  typedef shared_ptr<const SimpleParent> SimplePacketPtr;
 
   const int CLOSED_ERR_CODE = 1;
   const std::string HOST = "127.0.0.1";
@@ -412,27 +404,22 @@ TEST(ChannelIntegration, PingPongGeneratedPackets) {
   auto th_listener = std::thread([&]() {
     ChannelListener<SimpleParent> listener(packet_factory);
     listener.on_accept([&](const ChannelPtr& channel) {
-      channel->on_read([&](const ChannelPtr& channel,
-                           const SimplePacketPtr& pkt) {
-        auto const y_simple = dynamic_pointer_cast<const YetAnotherSimple>(pkt);
-        auto const yy_simple =
-            dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
-
-        auto is_pong = yy_simple != nullptr;
+      channel->on_read([&](const ChannelPtr& channel, const SimpleParent& pkt) {
+        auto is_pong = is_YetYetAnotherSimple(pkt);
 
         if (is_pong) {
-          check_yetyet_another_simple(yy_simple);
+          check_yetyet_another_simple(cast_to_YetYetAnotherSimple(pkt));
           channel->close();
           return;
         }
 
-        check_yet_another_simple(y_simple);
+        check_yet_another_simple(cast_to_YetAnotherSimple(pkt));
         channel->write(make_yetyet_another_simple(2));
       });
 
-      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });
+      channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });  // NOLINT
 
-      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });
+      channel->on_close([&](const ChannelPtr& channel) { listener.stop(); });  // NOLINT
     });
     auto err = listener.listen(HOST, PORT);
     EXPECT_EQ(CLOSED_ERR_CODE, err);
@@ -448,17 +435,14 @@ TEST(ChannelIntegration, PingPongGeneratedPackets) {
     ChannelClient<SimpleParent> client(packet_factory);
     client.on_connect([&](const ChannelPtr& channel) {
       channel->on_read([&](const ChannelPtr& channel,
-                           const SimplePacketPtr& pkt) {
-        auto const yy_simple =
-            dynamic_pointer_cast<const YetYetAnotherSimple>(pkt);
+                           const SimpleParent& pkt) {
+        ASSERT_TRUE(is_YetYetAnotherSimple(pkt));
 
-        ASSERT_NE(nullptr, yy_simple);
-
-        check_yetyet_another_simple(yy_simple);
+        check_yetyet_another_simple(cast_to_YetYetAnotherSimple(pkt));
         channel->write(make_yetyet_another_simple(2));
       });
 
-      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });
+      channel->on_close([&](const ChannelPtr& channel) { client.stop(); });  // NOLINT
 
       channel->write(make_yet_another_simple(2));
     });

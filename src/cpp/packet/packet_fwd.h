@@ -41,10 +41,13 @@ template <typename Packet>
 class Channel;
 
 template <typename Packet>
-std::shared_ptr<Packet> make_packet(const IoVector& io_vec);
+Packet make_packet(const IoVector& io_vec);
 
 template <typename Packet>
-std::shared_ptr<Packet> make_packet(size_t size);
+Packet make_packet(size_t size);
+
+template <typename Packet, typename ThatPacket>
+Packet make_packet(const ThatPacket& packet);
 
 IoVector make_io_vector(size_t size);
 IoVector make_io_vector(
