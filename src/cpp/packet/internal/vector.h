@@ -74,15 +74,20 @@ class IoVector final {
   IoVector& operator=(IoVector&&) = default;
 
   ~IoVector() {
+    if (unlikely(buf == nullptr)) {
+      return;
+    }
     free(buf);
   }
 
   /** Returns the io vectors. */
   char* get_buf(size_t offset = 0) {
+    assert(offset < size());
     return buf + offset;
   }
 
   const char* get_buf(size_t offset = 0) const {
+    assert(offset < size());
     return buf + offset;
   }
 
@@ -139,7 +144,7 @@ inline void intrusive_ptr_add_ref(packet::internal::IoVector* vector) {
 
 inline void intrusive_ptr_release(packet::internal::IoVector* vector) {
   if (vector->release() == 0) {
-    delete vector;
+    delete(vector);
   }
 }
 
