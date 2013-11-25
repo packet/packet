@@ -77,6 +77,16 @@ std::string type_name(const T& obj) {
   return demangle_type(typeid(obj), drop_const);
 }
 
+template <typename T>
+const char* type_name_cstr(const T& obj) {
+  return typeid(obj).name();
+}
+
+template <typename T>
+const char* type_name_cstr() {
+  return typeid(T).name();
+}
+
 inline bool is_string(const std::string& t) {
   return t == type_name<std::string>();
 }
@@ -98,6 +108,13 @@ inline bool is_pair_typename(const std::string& t) {
   auto pair_types = get_pair_types(t);
   return !pair_types.first.empty() && !pair_types.second.empty();
 }
+
+typedef size_t TypeIndex;
+
+inline TypeIndex get_type_index(const std::type_info& info) {
+  return reinterpret_cast<TypeIndex>(info.name());
+}
+
 
 }  // namespace particle
 
