@@ -81,7 +81,7 @@ class RingBuffer final {
     // (No real synchronization needed at destructor time: only one
     // thread can be doing this.)
     if (!std::is_trivially_destructible<T>::value) {
-      while (try_read()) {}
+      clear();
     }
 
     std::free(buffer);
@@ -178,6 +178,10 @@ class RingBuffer final {
 
   size_t capacity() const {
     return buffer_capacity;
+  }
+
+  void clear() {
+    while (try_read()) {}
   }
 
  private:
