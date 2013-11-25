@@ -356,6 +356,10 @@ namespace ${self.namespace_name(pom)} {\
   is_${packet.name}
 </%def>
 
+<%def name="is_child_invoke(packet, var_name)" buffered="True" filter="trim">
+  ${self.namespace_name(packe.pom)}::${is_child_method_name(packet)}(${var_name})
+</%def>
+
 <%def name="is_child_prototype(packet)" buffered="True" filter="trim">
   <%self:method_prototype>
     <%def name="return_type()" filter="trim">
@@ -374,6 +378,10 @@ namespace ${self.namespace_name(pom)} {\
 
 <%def name="cast_to_child_method_name(packet)" buffered="True" filter="trim">
   cast_to_${packet.name}
+</%def>
+
+<%def name="cast_to_child_invoke(packet, var_name)" buffered="True" filter="trim">
+  ${self.namespace_name(packe.pom)}::${cast_to_child_invoke(packet)}(${var_name})
 </%def>
 
 <%def name="cast_to_child_prototype(packet, qualified=False)" buffered="True"
