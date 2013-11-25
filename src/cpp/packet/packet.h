@@ -101,6 +101,10 @@ class PacketFactory final {
           break;
         }
 
+        if (data_size < size + *consumed) {
+          break;
+        }
+
         packets->push_back(make_packet<Packet>(io_vec));
         io_vec.consume(size);
         *consumed += size;

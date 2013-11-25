@@ -38,6 +38,8 @@
 
 #include "gtest/gtest.h"
 
+#include "particle/branch.h"
+
 #include "packet/internal/packet_fwd.h"
 
 namespace packet {

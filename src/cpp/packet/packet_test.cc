@@ -96,6 +96,21 @@ TEST(PacketFactoryTest, PacketSize) {
   EXPECT_EQ(k_sections, packets.size());
 }
 
+TEST(PacketFactoryTest, OutOfBoundReads) {
+  for (size_t i = 1; i < 100; i++) {
+    auto io_vector = make_io_vector(i);
+    for (size_t j = 0; j < i - 1; j++) {
+      io_vector.write_data<uint8_t>(1, j);
+    }
+    io_vector.write_data<uint8_t>(2, i - 1);
+
+    auto factory = make_packet_factory<TestPacket>();
+    auto packets = factory.read_packets(io_vector, io_vector.size());
+
+    EXPECT_EQ(size_t(i - 1), packets.size());
+  }
+}
+
 TEST(PacketGeneratorTest, PacketSize) {
   const size_t k_sections = 13;
   auto io_vector = make_packet_iov(k_sections);
