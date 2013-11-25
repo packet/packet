@@ -103,13 +103,15 @@ class IoVector final {
   void set_metadata(MetaData metadata) { this->metadata.store(metadata); }
 
   /** Adds to the reference count. */
-  RefCount add_ref(RefCount diff = 1) {
-    return ref_count.fetch_add(diff) + diff;
+  RefCount add_ref(RefCount diff = 1,
+                   std::memory_order order = std::memory_order_seq_cst) {
+    return ref_count.fetch_add(diff, order) + diff;
   }
 
   /** Subtracts from the reference count. */
-  RefCount release(RefCount diff = 1) {
-    return ref_count.fetch_sub(diff) - diff;
+  RefCount release(RefCount diff = 1,
+                   std::memory_order order = std::memory_order_seq_cst) {
+    return ref_count.fetch_sub(diff, order) - diff;
   }
 
   static void memmove(IoVector* that, size_t to, const IoVector* self,
@@ -141,11 +143,12 @@ class IoVector final {
 };
 
 inline void intrusive_ptr_add_ref(packet::internal::IoVector* vector) {
-  vector->add_ref();
+  vector->add_ref(1, std::memory_order_relaxed);
 }
 
 inline void intrusive_ptr_release(packet::internal::IoVector* vector) {
-  if (vector->release() == 0) {
+  if (vector->release(1, std::memory_order_release) == 0) {
+    std::atomic_thread_fence(std::memory_order_acquire);
     delete(vector);
   }
 }
