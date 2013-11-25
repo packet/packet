@@ -161,5 +161,7 @@ void init_thread() {
   pthread_sigmask(SIG_BLOCK, &signal_set, nullptr);
 }
 
+void ignore_signal(int signum) { signal(signum, SIG_IGN); }
+
 }  // namespace particle
 

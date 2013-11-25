@@ -51,6 +51,11 @@ class CleanupGaurd final {
  */
 void init_thread();
 
+/**
+ * Ignores the signal in the current thread.
+ */
+void ignore_signal(int signum);
+
 }  // namespace particle
 
 #endif  // CPP_PARTICLE_SIGNALS_H_
