@@ -30,7 +30,10 @@
 
 #include <limits.h>
 
+#include <csignal>
+
 #include <algorithm>
+#include <atomic>
 #include <ios>
 #include <memory>
 #include <string>
@@ -73,7 +76,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
         out_buffer(out_buf_size),
         read_handler(),
         close_handler(),
-        self(nullptr) {
+        self(nullptr),
+        closed(false) {
     stream.data = this;
     uv_tcp_init(loop, &stream);
 
@@ -143,6 +147,10 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
    * @param packet The packet.
    */
   bool write(Packet&& packet) {
+    if (is_closed()) {
+      return false;
+    }
+
     if (unlikely(!out_buffer.try_write(packet))) {
       return false;
     }
@@ -151,15 +159,23 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     return true;
   }
 
-  void close() { uv_async_send(close_async); }
+  void close() {
+    closed = true;
+    uv_async_send(close_async);
+  }
 
   ChannelId get_id() const { return ChannelId(this); }
 
  private:
   static const size_t VECTOR_SIZE = 64 * 1024;
 
+  bool is_closed() {
+    return closed;
+  }
+
   void do_close() {
     call_close_handler();
+    closed = true;
     close_stream();
   }
 
@@ -175,11 +191,12 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   }
 
   void read_packets(size_t size) {
-    if (!read_handler) {
+    if (!read_handler || is_closed()) {
       return;
     }
 
     this->written += size;
+    assert(io_vector->size() >= written);
 
     IoVector io_vector(this->io_vector, this->consumed);
     std::vector<std::shared_ptr<Packet>> packets;
@@ -188,6 +205,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     packet_factory.read_packets(io_vector, size, &packets, &consumed);
 
     this->consumed += consumed;
+    assert(this->consumed <= written);
 
     // TODO(soheil): PERF Here we need to fire the event and the worker threads
     // will handle that.
@@ -237,8 +255,9 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
       delete req;
     };
 
-    if (uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,
-        consumed, channel_after_write_cb)) {
+    if (is_closed() ||
+        uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,
+                 consumed, channel_after_write_cb)) {
       LOG(ERROR) << "Error in write.\n";
       delete packets;
       delete write_req;
@@ -265,7 +284,9 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     }
 
 
+    assert(consumed <= written);
     auto remainder = written - consumed;
+    assert(remainder <= new_io_vector->size());
     packet::internal::IoVector::memmove(new_io_vector.get(), 0,
         io_vector.get(), consumed, remainder);
     written = remainder;
@@ -380,6 +401,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   std::function<void(const ChannelPtr&)> close_handler;
 
   std::shared_ptr<Channel> self;
+  std::atomic<bool> closed;
 
   template <typename P>
   friend class ChannelListener;
@@ -586,6 +608,10 @@ class ChannelListener final : private packet::internal::UvLoop {
    * is called.
    */
   int listen(sockaddr_in addr, int backlog = DEFUALT_BACKLOG) {
+    // We need to ignore SIGPIPE because libuv can't correctly handle it on
+    // Linux.
+    particle::ignore_signal(SIGPIPE);
+
     uv_tcp_bind(&server, reinterpret_cast<sockaddr*>(&addr));
     auto err = uv_listen(reinterpret_cast<uv_stream_t*>(&server), backlog,
         [] (uv_stream_t* server, int status) {
