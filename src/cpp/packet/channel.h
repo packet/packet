@@ -166,7 +166,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   ChannelId get_id() const { return ChannelId(this); }
 
  private:
-  static const size_t VECTOR_SIZE = 4 * 1024;
+  static const size_t VECTOR_SIZE = 4 * 1024 - 8;
   static const size_t MAX_READ_SIZE = 1024;
 
   bool is_closed() {
