@@ -166,7 +166,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   ChannelId get_id() const { return ChannelId(this); }
 
  private:
-  static const size_t VECTOR_SIZE = 64 * 1024;
+  static const size_t VECTOR_SIZE = 4 * 1024;
+  static const size_t MAX_READ_SIZE = 1024;
 
   bool is_closed() {
     return closed;
@@ -294,9 +295,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   }
 
   bool out_of_space(size_t suggested_size) {
-    size_t vector_size = io_vector->size();
-    return vector_size - written < suggested_size &&
-        (suggested_size <= vector_size || written == vector_size);
+    return written == io_vector->size();
   }
 
   /** Allocates at least suggested_size from the shared IO vector. */
@@ -306,7 +305,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     }
 
     buf->base = io_vector->get_buf(written);
-    buf->len = io_vector->size() - written;
+    buf->len = std::min(io_vector->size() - written, MAX_READ_SIZE);
   }
 
   void start() {
