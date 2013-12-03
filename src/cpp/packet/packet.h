@@ -79,6 +79,11 @@ Packet make_packet(const IoVector& io_vec) {
 }
 
 template <typename Packet>
+Packet make_packet(IoVector&& io_vec) {
+  return Packet(io_vec);
+}
+
+template <typename Packet>
 Packet make_packet(size_t size) {
   return Packet(make_io_vector(size));
 }

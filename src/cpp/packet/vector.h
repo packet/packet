@@ -31,6 +31,7 @@
 #include <cstring>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "boost/format.hpp"
@@ -193,7 +194,9 @@ class IoVector final {
    * @param shared_vector The shared IO vector.
    * @param offset The offset in the shared IO vector.
    */
-  IoVector(SharedIoVectorPtr shared_vector, size_t offset = 0);
+  IoVector(const SharedIoVectorPtr& shared_vector, size_t offset = 0);
+
+  IoVector(SharedIoVectorPtr&& shared_vector, size_t offset = 0);
 
   template <typename Data, bool is_big_endian>
   typename ::std::enable_if<std::is_base_of<Packet, Data>::value, Data>::type
@@ -304,6 +307,8 @@ class IoVector final {
   friend class Packet;
 
   friend IoVector make_io_vector(const SharedIoVectorPtr&);
+  friend IoVector make_io_vector(SharedIoVectorPtr&&);
+
   friend IoVector make_iov(size_t, uint8_t);
   friend IoVector make_packet_iov(size_t);
 
@@ -313,15 +318,19 @@ class IoVector final {
 };
 
 inline IoVector make_io_vector(
-    const boost::intrusive_ptr<packet::internal::IoVector>& shared_io_vector) {
+    const IoVector::SharedIoVectorPtr& shared_io_vector) {
   return IoVector(shared_io_vector);
+}
+
+inline IoVector make_io_vector(IoVector::SharedIoVectorPtr&& shared_io_vector) {
+  return IoVector(std::move(shared_io_vector));
 }
 
 inline IoVector make_io_vector(size_t size) {
   assert(size != 0);
   auto shared_io_vector = packet::internal::make_shared_io_vector(size);
   std::memset(shared_io_vector->get_buf(0), 0, size);
-  return make_io_vector(shared_io_vector);
+  return make_io_vector(std::move(shared_io_vector));
 }
 
 }  // namespace packet

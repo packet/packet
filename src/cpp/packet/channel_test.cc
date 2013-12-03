@@ -98,45 +98,47 @@ TEST(ChannelTest, Allocation) {
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
 
-  const size_t buffer_size = 1024;
+  const size_t buffer_size = Channel<DummyPacket>::MAX_READ_SIZE;
 
   uv_buf_t buf;
   dummy_channel->allocate_uv_buf(buffer_size, &buf);
   EXPECT_NE(nullptr, buf.base);
-  EXPECT_EQ(dummy_channel->io_vector->size(), buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::MAX_READ_SIZE, buf.len);
 
   dummy_channel->allocate_uv_buf(buffer_size, &buf);
   EXPECT_NE(nullptr, buf.base);
-  EXPECT_EQ(dummy_channel->io_vector->size(), buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::MAX_READ_SIZE, buf.len);
 
-  dummy_channel->written += buffer_size;
-
-  dummy_channel->allocate_uv_buf(buffer_size, &buf);
-  EXPECT_NE(nullptr, buf.base);
-  EXPECT_EQ(dummy_channel->io_vector->size() - buffer_size, buf.len);
+  dummy_channel->written += Channel<DummyPacket>::VECTOR_SIZE - 1;
 
   auto old_vector = dummy_channel->io_vector;
 
-  dummy_channel->written = dummy_channel->io_vector->size() - buffer_size + 1;
-  dummy_channel->consumed = 0;
-
-  dummy_channel->allocate_uv_buf(dummy_channel->io_vector->size() + 1, &buf);
+  dummy_channel->allocate_uv_buf(1, &buf);
   EXPECT_NE(nullptr, buf.base);
+  EXPECT_EQ(size_t(1), buf.len);
   EXPECT_EQ(old_vector, dummy_channel->io_vector);
-  EXPECT_EQ(dummy_channel->io_vector->size() - dummy_channel->written, buf.len);
 
-  dummy_channel->allocate_uv_buf(buffer_size, &buf);
-  EXPECT_NE(nullptr, buf.base);
-  EXPECT_NE(old_vector, dummy_channel->io_vector);
-  EXPECT_EQ(dummy_channel->io_vector->size() - dummy_channel->written, buf.len);
-
-  dummy_channel->written = dummy_channel->io_vector->size() - buffer_size + 1;
+  dummy_channel->written = dummy_channel->io_vector->size();
   dummy_channel->consumed = dummy_channel->written;
 
-  dummy_channel->allocate_uv_buf(buffer_size, &buf);
+  dummy_channel->allocate_uv_buf(1, &buf);
   EXPECT_NE(nullptr, buf.base);
   EXPECT_NE(old_vector, dummy_channel->io_vector);
-  EXPECT_EQ(dummy_channel->io_vector->size(), buf.len);
+  EXPECT_EQ(buffer_size, buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE,
+            dummy_channel->io_vector->size());
+
+  old_vector = dummy_channel->io_vector;
+
+  dummy_channel->written = dummy_channel->io_vector->size();
+  dummy_channel->consumed = 0;
+
+  dummy_channel->allocate_uv_buf(1, &buf);
+  EXPECT_NE(nullptr, buf.base);
+  EXPECT_NE(old_vector, dummy_channel->io_vector);
+  EXPECT_EQ(buffer_size, buf.len);
+  EXPECT_NE(Channel<DummyPacket>::VECTOR_SIZE,
+            dummy_channel->io_vector->size());
 
   uv_loop_delete(loop);
 
@@ -150,13 +152,13 @@ TEST(ChannelTest, ReadPackets) {
   EXPECT_NE(nullptr, dummy_channel);
 
   const size_t packet_size = 2;
-  const size_t packet_count = 1024;
+  const size_t packet_count = 48;
   const size_t buffer_size = packet_count * packet_size;
   uv_buf_t buf;
 
   dummy_channel->allocate_uv_buf(buffer_size, &buf);
 
-  EXPECT_TRUE(buf.len >= buffer_size);
+  EXPECT_TRUE(buf.len <= Channel<DummyPacket>::MAX_READ_SIZE);
 
   std::memset(buf.base, packet_size, buffer_size);
 

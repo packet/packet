@@ -63,7 +63,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
    * Never use this constructor. It's just public because of std::make_shared.
    */
   explicit Channel(PacketFactory<Packet> packet_factory, uv_loop_t* loop,
-                   size_t out_buf_size = 1024)
+                   size_t out_buf_size = 2 << 12)
       : std::enable_shared_from_this<Channel>(),
         io_vector(nullptr),
         written(0),
@@ -146,7 +146,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
    * @param packet The packet.
    */
   bool write(Packet&& packet) {
-    if (is_closed()) {
+    if (unlikely(is_closed())) {
       return false;
     }
 
@@ -166,8 +166,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   ChannelId get_id() const { return ChannelId(this); }
 
  private:
-  static const size_t VECTOR_SIZE = 4 * 1024 - 8;
-  static const size_t MAX_READ_SIZE = 1024;
+  static const size_t VECTOR_SIZE;
+  static const size_t MAX_READ_SIZE;
 
   bool is_closed() {
     return closed;
@@ -273,7 +273,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
   /** Creates a new IO vector for future reads. */
   void reinitialize_vector() {
-    auto new_io_vector = packet::internal::make_shared_io_vector(VECTOR_SIZE);
+    auto new_io_vector =
+        packet::internal::make_shared_io_vector(get_new_vector_size());
     new_io_vector->set_metadata(get_id());
 
     if (unlikely(io_vector == nullptr)) {
@@ -283,7 +284,6 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
       return;
     }
 
-
     assert(consumed <= written);
     auto remainder = written - consumed;
     assert(remainder <= new_io_vector->size());
@@ -292,6 +292,14 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     written = remainder;
     consumed = 0;
     io_vector = new_io_vector;
+  }
+
+  size_t get_new_vector_size() {
+    if (likely(consumed != 0 || written < VECTOR_SIZE)) {
+      return VECTOR_SIZE;
+    }
+
+    return VECTOR_SIZE + written;
   }
 
   bool out_of_space(size_t suggested_size) {
@@ -417,6 +425,13 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   FRIEND_TEST(ChannelTest, MakeChannel);
   FRIEND_TEST(ChannelTest, ReadPackets);
 };
+
+template <typename Packet>
+const size_t Channel<Packet>::VECTOR_SIZE = 4 * 1024 - 8;
+
+template <typename Packet>
+const size_t Channel<Packet>::MAX_READ_SIZE = 1024;
+
 
 template <typename Packet, typename... Args>
 std::shared_ptr<Channel<Packet>> make_channel(Args... args) {
