@@ -34,6 +34,8 @@
 #error Cannot use getcpu for your platform.
 #endif
 
+#include <thread>
+
 namespace particle {
 
 typedef int32_t CpuId;
