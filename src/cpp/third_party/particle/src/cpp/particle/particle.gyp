@@ -43,6 +43,7 @@
         '<(particle_src_dir)',
       ],
       'sources': [
+        'array.h',
         'bithacks.h',
         'branch.h',
         'byteordering.h',
@@ -74,12 +75,24 @@
       ],
     },
     {
+      'target_name': 'cpu',
+      'type': '<(library)',
+      'dependencies': [
+        'headers',
+      ],
+      'sources': [
+        'cpu.h',
+        'cpu.cc',
+      ],
+    },
+    {
       'target_name': 'particle_unittests',
       'type': 'executable',
       'dependencies': [
         '<@(particle_third_party_dir)/boost.gyp:boost_thread',
         '<@(particle_third_party_dir)/gtest.gyp:gtest_main',
         '<@(particle_third_party_dir)/gmock.gyp:gmock',
+        'cpu',
         'headers',
         'typename',
       ],
@@ -88,6 +101,7 @@
         'boost_test.cc',
         'memory_test.cc',
         'ringbuffer_test.cc',
+        'thread_test.cc',
         'typename_test.cc',
       ],
     },
