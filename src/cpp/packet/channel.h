@@ -397,7 +397,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   PacketFactory<Packet> packet_factory;
 
   /** The buffer used for outgoing packets. */
-  particle::RingBuffer<Packet> out_buffer;
+  particle::PerCpuRingBuffer<Packet> out_buffer;
 
   // TODO(soheil): Write a light weight functor. We don't really need such a
   //               structure. Then explain why we didn't use std::fucntion,
@@ -424,6 +424,8 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   FRIEND_TEST(ChannelTest, Allocation);
   FRIEND_TEST(ChannelTest, MakeChannel);
   FRIEND_TEST(ChannelTest, ReadPackets);
+  FRIEND_TEST(ChannelTest, WritePackets);
+  FRIEND_TEST(ChannelTest, WritePacketsPerCpu);
 };
 
 template <typename Packet>

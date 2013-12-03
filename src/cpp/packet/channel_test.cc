@@ -33,6 +33,8 @@
 
 #include "gtest/gtest.h"
 
+#include "particle/cpu.h"
+
 #include "packet/channel.h"
 #include "packet/packet.h"
 
@@ -183,6 +185,60 @@ TEST(ChannelTest, ReadPackets) {
 }
 
 TEST(ChannelTest, WritePackets) {
+  auto packet_factory = make_packet_factory<DummyPacket>();
+  auto loop = uv_loop_new();
+  auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
+  EXPECT_NE(nullptr, dummy_channel);
+
+  const uint8_t ID = 2;
+  DummyPacket w_p(2);
+  w_p.set_id(ID);
+  EXPECT_TRUE(dummy_channel->write(std::move(w_p)));
+  EXPECT_EQ(size_t(1), dummy_channel->out_buffer.guess_size());
+
+  DummyPacket r_p(2);
+  EXPECT_TRUE(dummy_channel->out_buffer.try_read(&r_p));
+  EXPECT_EQ(ID, r_p.get_id());
+
+  uv_loop_delete(loop);
+
+  dispose_channel(dummy_channel);
+}
+
+TEST(ChannelTest, WritePacketsPerCpu) {
+  auto packet_factory = make_packet_factory<DummyPacket>();
+  auto loop = uv_loop_new();
+  auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
+  EXPECT_NE(nullptr, dummy_channel);
+
+  const uint8_t ID = 2;
+
+  const size_t cpu_count = dummy_channel->out_buffer.get_cpu_count();
+  for (size_t i = 0; i < cpu_count; i++) {
+    std::thread([&] {
+      EXPECT_EQ(0, particle::set_cpu_affinity(i));
+      EXPECT_EQ(i, (particle::get_cached_cpu_of_this_thread()));
+
+      DummyPacket w_p(2);
+      w_p.set_id(ID);
+      EXPECT_TRUE(dummy_channel->write(std::move(w_p)));
+      EXPECT_EQ(size_t(1), dummy_channel->out_buffer.guess_size(i));
+    }).join();
+  }
+
+  EXPECT_EQ(cpu_count, dummy_channel->out_buffer.guess_size());
+
+  for (size_t i = 0; i < cpu_count; i++) {
+    DummyPacket r_p(2);
+    EXPECT_TRUE(dummy_channel->out_buffer.try_read(&r_p));
+    EXPECT_EQ(ID, r_p.get_id());
+  }
+
+  EXPECT_EQ(size_t(0), dummy_channel->out_buffer.guess_size());
+
+  uv_loop_delete(loop);
+
+  dispose_channel(dummy_channel);
 }
 
 TEST(ChannelListener, MakeListener) {
