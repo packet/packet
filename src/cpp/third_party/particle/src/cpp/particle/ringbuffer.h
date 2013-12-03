@@ -294,23 +294,64 @@ class PerCpuRingBuffer {
     return buffers[cpu_id].try_write(std::move(record));
   }
 
-  bool try_read(T* record, CpuId cpu_id = get_cached_cpu_of_this_thread()) {
+  bool try_read(T* record, CpuId cpu_id) {
     assert(cpu_id < buffers.size());
     return buffers[cpu_id].try_read(record);
+  }
+
+  /** Reads from all buffers, and returns when a read is successful. */
+  bool try_read(T* record, CpuId* last_cpu_id = nullptr) {
+    CpuId cpu_id = 0;
+    if (last_cpu_id != nullptr) {
+      cpu_id = *last_cpu_id;
+      assert(cpu_id < get_cpu_count());
+    }
+
+    int probed_cpus = 0;
+    while (probed_cpus++ < get_cpu_count()) {
+      if (try_read(record, cpu_id)) {
+        if (last_cpu_id != nullptr) {
+          *last_cpu_id = cpu_id;
+        }
+
+        return true;
+      }
+
+      cpu_id++;
+
+      if (cpu_id >= get_cpu_count()) {
+        cpu_id = 0;
+      }
+    }
+
+    if (last_cpu_id != nullptr) {
+      *last_cpu_id = 0;
+    }
+
+    return false;
   }
 
   // TODO(soheil): Add api to read from any non-empty buffer.
 
   /** @return The size of the buffer allocated for cpu_id. */
-  size_t guess_size(CpuId cpu_id) {
+  size_t guess_size(CpuId cpu_id) const {
     return buffers[cpu_id].guess_size();
   }
 
-  size_t capacity_of_cpu(CpuId cpu_id) {
+  /** @return The total size of all buffers. */
+  size_t guess_size() const {
+    size_t size = 0;
+    for (CpuId id = 0; id < get_cpu_count(); id++) {
+      size += guess_size(id);
+    }
+    return size;
+  }
+
+  size_t capacity_of_cpu(CpuId cpu_id) const {
     return buffers[cpu_id].capacity();
   }
 
-  size_t get_cpu_count() {
+  size_t get_cpu_count() const {
     return buffers.size();
   }
 

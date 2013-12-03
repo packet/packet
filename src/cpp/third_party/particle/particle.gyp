@@ -38,6 +38,7 @@
         '<(particle_cpp_src_dir)/particle/particle.gyp:headers',
         '<(particle_cpp_src_dir)/particle/particle.gyp:signal',
         '<(particle_cpp_src_dir)/particle/particle.gyp:typename',
+        '<(particle_cpp_src_dir)/particle/particle.gyp:cpu',
       ],
       'sources': [
         'commons.gypi',
