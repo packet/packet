@@ -45,7 +45,7 @@ TEST(IoVector, PublicMethods) {
 
 TEST(IoVector, ThreadSafety) {
   std::vector<std::thread> threads;
-  const size_t THREAD_COUNT = 1000;
+  const size_t THREAD_COUNT = 100;
   const size_t VECTOR_PER_THREAD = 10000;
   const size_t VEC_SIZE = 128;
 

@@ -230,7 +230,8 @@ TEST(ChannelTest, WritePacketsPerCpu) {
 
   for (size_t i = 0; i < cpu_count; i++) {
     DummyPacket r_p(2);
-    EXPECT_TRUE(dummy_channel->out_buffer.try_read(&r_p));
+    particle::CpuId cpu_id = 0;
+    EXPECT_TRUE(dummy_channel->out_buffer.try_read(&r_p, &cpu_id));
     EXPECT_EQ(ID, r_p.get_id());
   }
 
@@ -310,7 +311,14 @@ TEST(ChannelIntegration, PingPong) {
         }
 
         current_id = PONG_ID;
-        channel->write(make_dummy_packet(PONG_ID));
+        // Test for thread affinity and per cpu buffer.
+        std::thread([&] {
+                      EXPECT_EQ(0,
+                                particle::set_cpu_affinity(
+                                    std::thread::hardware_concurrency() - 1));
+
+                      channel->write(make_dummy_packet(PONG_ID));
+                    }).join();
       });
 
       channel->on_error([&](const ChannelPtr& channel) { EXPECT_TRUE(false); });  // NOLINT
@@ -338,7 +346,13 @@ TEST(ChannelIntegration, PingPong) {
 
       channel->on_close([&](const ChannelPtr& channel) { client.stop(); });  // NOLINT
 
-      channel->write(make_dummy_packet(PING_ID));
+      // Test for thread affinity and per cpu buffer.
+      std::thread([&] {
+                    EXPECT_EQ(0, particle::set_cpu_affinity(
+                                     std::thread::hardware_concurrency() - 1));
+
+                    channel->write(make_dummy_packet(PING_ID));
+                  }).join();
     });
     auto err = client.connect_to(HOST, PORT);
     EXPECT_EQ(CLOSED_ERR_CODE, err);
