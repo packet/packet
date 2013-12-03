@@ -32,9 +32,11 @@
 #include <thread>
 #include <vector>
 
-#include "particle/bithacks.h"
-#include "particle/ringbuffer.h"
 #include "gtest/gtest.h"
+
+#include "particle/bithacks.h"
+#include "particle/cpu.h"
+#include "particle/ringbuffer.h"
 
 namespace particle {
 
@@ -181,6 +183,28 @@ TEST(RingBuffer, MultipleThreadsMultipleEntrance) {
 
 TEST(RingBuffer, MultipleThreadsMultipleMsgsMultipleEntrance) {
   ASSERT_NO_THROW(test_multiple_threads<true>(17, 7, 233));
+}
+
+TEST(PerCpuRingBuffer, Allocation) {
+  const size_t RING_BUFFER_SIZE = 5;
+  PerCpuRingBuffer<int> ring_buffer(RING_BUFFER_SIZE);
+  EXPECT_EQ(std::thread::hardware_concurrency(), ring_buffer.get_cpu_count());
+
+  for (size_t i = 0; i < ring_buffer.get_cpu_count(); i++) {
+    std::thread([&] {
+      EXPECT_EQ(0, set_cpu_affinity(i));
+      EXPECT_EQ(i, (get_cached_cpu_of_this_thread()));
+      while (!ring_buffer.try_write(i)) {}
+    }).join();
+  }
+
+  for (size_t i = 0; i < ring_buffer.get_cpu_count(); i++) {
+    EXPECT_EQ(size_t(1), ring_buffer.guess_size(i));
+
+    int data;
+    EXPECT_TRUE(ring_buffer.try_read(&data, i));
+    EXPECT_EQ(i, data);
+  }
 }
 
 }  // namespace particle
