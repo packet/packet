@@ -98,11 +98,12 @@ class PacketFactory final {
  public:
   typedef std::vector<Packet> PacketVector;
 
-  void read_packets(IoVector io_vec, size_t data_size,
-      PacketVector* packets, size_t* consumed) {
+  template <typename F>
+  void read_packets(IoVector* io_vec, size_t data_size, F read_cb,
+                    size_t* consumed) {
     while (*consumed < data_size) {
       try {
-        auto size = size_reader(io_vec);
+        auto size = size_reader(*io_vec);
 
         if (unlikely(size == 0)) {
           // T(soheil): This should be an indication of error.
@@ -113,8 +114,9 @@ class PacketFactory final {
           break;
         }
 
-        packets->push_back(make_packet<Packet>(io_vec));
-        io_vec.consume(size);
+        read_cb(make_packet<Packet>(*io_vec));
+
+        io_vec->consume(size);
         *consumed += size;
       } catch(NotEnoughDataException& e) {  // NOLINT
         break;
@@ -122,10 +124,12 @@ class PacketFactory final {
     }
   }
 
-  PacketVector read_packets(IoVector io_vec, size_t data_size) {
+  PacketVector read_packets(IoVector* io_vec, size_t data_size) {
     PacketVector packets;
     size_t consumed = 0;
-    read_packets(io_vec, data_size, &packets, &consumed);
+    read_packets(io_vec, data_size,
+                 [&](const Packet& packet) { packets.push_back(packet); },
+                 &consumed);
     return packets;
   }
 

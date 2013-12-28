@@ -51,8 +51,9 @@
 
 namespace packet {
 
-template <typename Packet>
-class Channel : public std::enable_shared_from_this<Channel<Packet>> {
+template <typename Packet, typename Factory>
+class Channel
+    : public std::enable_shared_from_this<Channel<Packet, Factory>> {
  public:
   typedef boost::intrusive_ptr<packet::internal::IoVector> SharedIoVector;
   typedef std::shared_ptr<Channel> ChannelPtr;
@@ -62,7 +63,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   /**
    * Never use this constructor. It's just public because of std::make_shared.
    */
-  explicit Channel(PacketFactory<Packet> packet_factory, uv_loop_t* loop,
+  explicit Channel(Factory packet_factory, uv_loop_t* loop,
                    size_t out_buf_size = 2 << 12)
       : std::enable_shared_from_this<Channel>(),
         io_vector(nullptr),
@@ -151,6 +152,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     }
 
     if (unlikely(!out_buffer.try_write(packet))) {
+      printf("error\n");
       return false;
     }
 
@@ -199,19 +201,16 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
     assert(io_vector->size() >= written);
 
     IoVector io_vector(this->io_vector, this->consumed);
-    std::vector<Packet> packets;
+
     size_t consumed = 0;
 
-    packet_factory.read_packets(io_vector, size, &packets, &consumed);
+    packet_factory.read_packets(
+        &io_vector, size,
+        [&](const Packet& packet) { this->call_read_handler(packet); },
+        &consumed);
 
     this->consumed += consumed;
     assert(this->consumed <= written);
-
-    // TODO(soheil): PERF Here we need to fire the event and the worker threads
-    // will handle that.
-    for (auto& packet : packets) {
-      call_read_handler(packet);
-    }
   }
 
   void write_packets() {
@@ -221,11 +220,12 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
 
     size_t consumed = 0;
     Packet packet(make_io_vector(nullptr));
+    particle::CpuId last_cpu_id = 0;
     for (; consumed < buffer_size; consumed++) {
-      if (!out_buffer.try_read(&packet)) {
+      if (!out_buffer.try_read(&packet, &last_cpu_id)) {
         break;
       }
-      packets->push_back(packet);
+      packets->push_back(std::move(packet));
     }
 
     if (!consumed) {
@@ -249,6 +249,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
       if (status < 0) {
         LOG(ERROR) << "Error in write";
       }
+
 
       auto packets = static_cast<std::vector<Packet>*>(req->data);
       delete packets;
@@ -394,7 +395,7 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   uv_async_t* write_async;
 
   /** Packet factory used for consuming packets. */
-  PacketFactory<Packet> packet_factory;
+  Factory packet_factory;
 
   /** The buffer used for outgoing packets. */
   particle::PerCpuRingBuffer<Packet> out_buffer;
@@ -409,14 +410,14 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   std::shared_ptr<Channel> self;
   std::atomic<bool> closed;
 
-  template <typename P>
+  template <typename P, typename F>
   friend class ChannelListener;
 
-  template <typename P>
+  template <typename P, typename F>
   friend class ChannelClient;
 
-  template <typename P, typename... A>
-  friend std::shared_ptr<Channel<P>> make_channel(A... args);
+  template <typename P, typename F, typename... A>
+  friend std::shared_ptr<Channel<P, F>> make_channel(F f, A... args);
 
   template <typename C>
   friend void dispose_channel(const std::shared_ptr<C>& channel);
@@ -428,30 +429,31 @@ class Channel : public std::enable_shared_from_this<Channel<Packet>> {
   FRIEND_TEST(ChannelTest, WritePacketsPerCpu);
 };
 
-template <typename Packet>
-const size_t Channel<Packet>::VECTOR_SIZE = 4 * 1024 - 8;
+template <typename Packet, typename Factory>
+const size_t Channel<Packet, Factory>::VECTOR_SIZE = 4 * 1024 - 8;
 
-template <typename Packet>
-const size_t Channel<Packet>::MAX_READ_SIZE = 1024;
+template <typename Packet, typename Factory>
+const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 2048;
 
-
-template <typename Packet, typename... Args>
-std::shared_ptr<Channel<Packet>> make_channel(Args... args) {
-  auto channel = std::make_shared<Channel<Packet>>(std::forward<Args>(args)...);
+template <typename Packet, typename Factory, typename... Args>
+std::shared_ptr<Channel<Packet, Factory>> make_channel(Factory factory,
+                                                       Args... args) {
+  auto channel = std::make_shared<Channel<Packet, Factory>>(
+      factory, std::forward<Args>(args)...);
   channel->self = channel;
   return channel;
 }
 
-template <typename Packet>
+template <typename Packet, typename Factory = PacketFactory<Packet>>
 class ChannelClient final : private packet::internal::UvLoop {
  public:
-  typedef std::shared_ptr<Channel<Packet>> ChannelPtr;
+  typedef std::shared_ptr<Channel<Packet, Factory>> ChannelPtr;
 
   /**
    * Never call this method.
    * @see make_client_channel.
    */
-  explicit ChannelClient(PacketFactory<Packet> packet_factory)
+  explicit ChannelClient(Factory packet_factory)
       : UvLoop(),
         packet_factory(packet_factory),
         stop_async(),
@@ -459,16 +461,18 @@ class ChannelClient final : private packet::internal::UvLoop {
         connection_handler(),
         cleanup_gaurd([this] { this->stop(); }) {
     stop_async.data = this;
-    uv_async_init(loop, &stop_async, [] (uv_async_t* async, int status) {
-          if (status) {
-            // FIXME(soheil): Log this.
-            return;
-          }
+    uv_async_init(loop, &stop_async, [](uv_async_t* async, int status) {
+      if (status) {
+        // FIXME(soheil): Log this.
+        return;
+      }
 
-          auto self = static_cast<ChannelClient*>(async->data);
-          if (self->channel != nullptr) { self->channel->close(); }
-          self->stop_loop();
-        });
+      auto self = static_cast<ChannelClient*>(async->data);
+      if (self->channel != nullptr) {
+        self->channel->close();
+      }
+      self->stop_loop();
+    });
   }
 
   ~ChannelClient() {
@@ -539,13 +543,13 @@ class ChannelClient final : private packet::internal::UvLoop {
   }
 
   /** The packet factory used for reading packets from the stream. */
-  PacketFactory<Packet> packet_factory;
+  Factory packet_factory;
 
   /** Used for stopping the client. */
   uv_async_t stop_async;
 
   /** The client channel. */
-  std::shared_ptr<Channel<Packet>> channel;
+  ChannelPtr channel;
 
   /** Handler called when the connection is established. */
   std::function<void(const ChannelPtr& channel)> connection_handler;
@@ -556,18 +560,18 @@ class ChannelClient final : private packet::internal::UvLoop {
 
 // FIXME(soheil): Does not support ipv6. Fix that. sin should be converted to
 // sockaddr.
-template <typename Packet>
+template <typename Packet, typename Factory = PacketFactory<Packet>>
 class ChannelListener final : private packet::internal::UvLoop {
  public:
   static const int DEFUALT_BACKLOG = 1024;
 
-  typedef std::shared_ptr<Channel<Packet>> ChannelPtr;
+  typedef std::shared_ptr<Channel<Packet, Factory>> ChannelPtr;
 
   /**
    * @param packet_factory The packet factory.
    * @param sin The listening socket address.
    */
-  explicit ChannelListener(PacketFactory<Packet> packet_factory)
+  explicit ChannelListener(Factory packet_factory)
       : packet::internal::UvLoop(),
         server(),
         stop_async(),
@@ -614,7 +618,7 @@ class ChannelListener final : private packet::internal::UvLoop {
    * Registers a handler that is called when an error occurs.
    * @param handler The error handler.
    */
-  void on_error(std::function<void(ChannelListener<Packet>*)> handler) {
+  void on_error(std::function<void(ChannelListener*)> handler) {  // NOLINT
     error_handler = handler;
   }
 
@@ -698,13 +702,13 @@ class ChannelListener final : private packet::internal::UvLoop {
   std::function<void(const ChannelPtr&)> accept_handler;  // NOLINT
 
   /** Invoked when there is an error in the listener. */
-  std::function<void(ChannelListener<Packet>*)> error_handler;  // NOLINT
+  std::function<void(ChannelListener*)> error_handler;  // NOLINT
 
   /**
    * The packet factory used for reading and writing packets on all channels
    * accepted through this listener.
    */
-  PacketFactory<Packet> packet_factory;
+  Factory packet_factory;
 
   particle::CleanupGaurd cleanup_gaurd;
 };

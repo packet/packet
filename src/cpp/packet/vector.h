@@ -302,7 +302,7 @@ class IoVector final {
   SharedIoVectorPtr shared_io_vector;
   size_t offset;
 
-  template <typename Packet>
+  template <typename Packet, typename Factory>
   friend class Channel;
   friend class Packet;
 

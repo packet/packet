@@ -38,6 +38,9 @@ class IoVector;
 class Packet;
 
 template <typename Packet>
+class PacketFactory;
+
+template <typename Packet, typename Factory = PacketFactory<Packet>>
 class Channel;
 
 template <typename Packet>
