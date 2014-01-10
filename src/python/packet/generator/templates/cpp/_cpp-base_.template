@@ -1,6 +1,7 @@
 <%!
   from packet.generator.cpp import CppNamingStrategy
   from packet.generator.cpp import TYPE_VARIANTS
+  from packet.parser.model import Packet
 %>
 <%
   self.cpp_naming = CppNamingStrategy()
@@ -205,8 +206,12 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      % if field.has_const_size():
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE, repeated_info=field.repeated_info)} ${field.name}
+      % if not field.is_repeated():
+      ${self.type_name(field.type, const=True,
+                       variant=TYPE_VARIANTS.REFERENCE)} ${field.name}
+      % elif field.has_const_size():
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.REFERENCE,
+                       repeated_info=field.repeated_info)} ${field.name}
       % else:
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
       % endif
@@ -234,8 +239,11 @@ namespace ${self.namespace_name(pom)} {\
       ${self.class_name(field.packet)}
     </%def>
     <%def name="args()" filter="trim">
-      % if field.has_const_size():
-      ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE,
+      % if not field.is_repeated():
+      ${self.type_name(field.type, const=True,
+                       variant=TYPE_VARIANTS.REFERENCE)} ${field.name}, packet::IoVector& io_vector
+      % elif field.has_const_size():
+      ${self.type_name(field.type, variant=TYPE_VARIANTS.REFERENCE,
                        repeated_info=field.repeated_info)} ${field.name}, packet::IoVector& io_vector
       % else:
       ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}, packet::IoVector& io_vector

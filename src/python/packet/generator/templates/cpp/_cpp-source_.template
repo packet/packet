@@ -84,7 +84,12 @@ ${self.static_getter_prototype(field, qualified=True)} {
 
 ${self.setter_prototype(field, qualified=True)} {
   ${cpp_class_name}::${self.static_setter_name(field)}(
-      ::std::move(${field.name}), vector);
+      % if field.has_const_size():
+      ${field.name},
+      % else:
+      ::std::move(${field.name}),
+      % endif
+      vector);
 }
 
 ${self.static_setter_prototype(field, qualified=True)} {
