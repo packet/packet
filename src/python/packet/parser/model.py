@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, The Packet project authors. All rights reserved.
+# Copyright (c) 2012-2014, The Packet project authors. All rights reserved.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -184,16 +184,20 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       return None
 
     if name.find('.') == -1:
+      LOG.debug('Finding %s in %s' % (name, self.namespace))
       return self.packets.get(name) or self.enums.get(name)
     else:
       # TODO(soheil): Just one level of namespaces?
       namespace = name.split('.')[0]
       type_name = name.split('.')[-1]
+
       if namespace == self.namespace:
+        LOG.debug('Finding %s in %s' % (name, namespace))
         return self.packets.get(type_name) or self.enums.get(type_name)
 
       namespace_pom = self.includes.get(namespace)
-      return namespace_pom.find_packet(type_name) if namespace_pom else None
+      assert namespace_pom, ('Namespace not found %s' % namespace_pom)
+      return namespace_pom.find_type(type_name)
 
 class Enum(object):  # pylint: disable=R0903
   ''' Represents an enum. '''

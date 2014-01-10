@@ -31,7 +31,7 @@
       'target_name': 'gen_test_packet',
       'type': 'none',
       'sources': [
-        #'simple.packet',
+        'simple.packet',
         'including.packet',
         '<(packet_output_dir)/simple.cc',
         '<(packet_output_dir)/including.cc',

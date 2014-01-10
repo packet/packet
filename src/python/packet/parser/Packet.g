@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Packet project authors. All rights reserved.
+ * Copyright (c) 2012-2014, The Packet project authors. All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -171,7 +171,7 @@ annotation_value: literal | NUMBER | enumeration_reference;
 
 enumeration_reference:
     IDENTIFIER DOT IDENTIFIER DOT IDENTIFIER ->
-        ^(ENUM_REF IDENTIFIER? IDENTIFIER IDENTIFIER) |
+        ^(ENUM_REF IDENTIFIER IDENTIFIER IDENTIFIER) |
     IDENTIFIER DOT IDENTIFIER -> ^(ENUM_REF IDENTIFIER IDENTIFIER);
 
 literal: LITERAL;
