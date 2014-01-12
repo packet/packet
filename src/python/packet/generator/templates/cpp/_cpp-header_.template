@@ -15,7 +15,7 @@ ${self.include(packet.namespace)}
 
 <%block name="code_body">\
 % for name, enum in pom.enums.iteritems():
-enum class ${name} {
+enum class ${name} : uint64_t {
   % for name, item in enum.items.iteritems():
   ${name} = ${item.value},
   % endfor
