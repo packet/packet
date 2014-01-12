@@ -188,10 +188,10 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="setter_name(field)" buffered="True" filter="trim">
-  % if field.has_const_size():
-  set_${field.name}
-  % else:
+  % if field.is_dynamic_repeated():
   add_${field.name}
+  % else:
+  set_${field.name}
   % endif
 </%def>
 
@@ -203,7 +203,7 @@ namespace ${self.namespace_name(pom)} {\
       ${self.type_name(field.type, const=True,
                        variant=TYPE_VARIANTS.REFERENCE)} ${field.name}
     % endif
-  % elif field.has_const_size():
+  % elif not field.is_dynamic_repeated():
   ${self.type_name(field.type, variant=TYPE_VARIANTS.REFERENCE,
                    repeated_info=field.repeated_info)} ${field.name}
   % else:
@@ -229,10 +229,10 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="static_setter_name(field)" buffered="True" filter="trim">
-  % if field.has_const_size():
-    set_${field.name}_
-  % else:
+  % if field.is_dynamic_repeated():
     add_${field.name}_
+  % else:
+    set_${field.name}_
   % endif
 </%def>
 

@@ -34,11 +34,13 @@ from packet.annotations import create_field_level_annotation
 from packet.parser.PacketLexer import PacketLexer
 from packet.parser.PacketParser import PacketParser
 from packet.types import builtin_types
+from packet.types import BuiltInType
 from packet.utils.packaging import search_for_packet
 
 
 LOG = logging.getLogger('packet.parser.model')
 
+__PARSED_PACKETS = {}
 
 def parse_file(file_path):
   ''' Returns a pythonic PacketParser.
@@ -48,9 +50,14 @@ def parse_file(file_path):
   if not qualified_path:
     return None
 
+  if __PARSED_PACKETS.get(file_path):
+    return __PARSED_PACKETS.get(file_path)
+
   file_name = os.path.basename(file_path)
   name, ext = os.path.splitext(file_name)  # pylint: disable=W0612
-  return parse_stream(ANTLRFileStream(qualified_path, 'UTF8'), name)
+  pom = parse_stream(ANTLRFileStream(qualified_path, 'UTF8'), name)
+  __PARSED_PACKETS[file_path] = pom
+  return pom
 
 def parse_string(string, namespace):
   ''' Returns a pythonic PacketParser.
@@ -383,9 +390,15 @@ class Field(object):  # pylint: disable=R0903
     ''' Whether the field has a fixed size. '''
     return self.repeated_info and self.repeated_info.count
 
-  def has_const_size(self):
+  def is_dynamic_repeated(self):
     ''' Whether the field is fixed in size. '''
-    return not self.is_repeated() or self.is_const_size_repeated()
+    return self.is_repeated() and not self.is_const_size_repeated()
+
+  def has_const_size(self):
+    ''' Whether the field has a constant pre-known size. '''
+    return not self.is_dynamic_repeated() and \
+        (isinstance(self.type, BuiltInType) or \
+         self.type.is_const_size())
 
   def set_repeated_info(self, size_field=None, count_field=None, count=None):
     ''' Sets the repeat info of the field. '''

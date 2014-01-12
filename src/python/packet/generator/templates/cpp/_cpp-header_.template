@@ -32,7 +32,7 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
  public:
   enum class SubPackets {
   % for p in packet.children:
-    ${self.class_name(p).upper()},
+    ${p.pom.namespace.upper()}_${self.class_name(p).upper()},
   % endfor
   };
 

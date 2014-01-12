@@ -62,7 +62,7 @@ ${self.getter_prototype(field, qualified=True)} {
 
 ${self.static_getter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
-  % if field.is_repeated() and not field.has_const_size():
+  % if field.is_dynamic_repeated():
     % if field.get_size_field():
   auto size = ${cpp_class_name}::${self.static_getter_name(field.get_size_field())}(io_vector);
     % else:
@@ -84,7 +84,7 @@ ${self.static_getter_prototype(field, qualified=True)} {
 
 ${self.setter_prototype(field, qualified=True)} {
   ${cpp_class_name}::${self.static_setter_name(field)}(
-      % if field.has_const_size():
+      % if not field.is_dynamic_repeated():
       ${field.name},
       % else:
       ::std::move(${field.name}),
@@ -95,7 +95,7 @@ ${self.setter_prototype(field, qualified=True)} {
 ${self.static_setter_prototype(field, qualified=True)} {
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
 
-  % if field.has_const_size():
+  % if not field.is_dynamic_repeated():
   io_vector.write_data<${cpp_type_name}, ${big_endian}>(${field.name}, offset);
   % else:
   offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
@@ -147,7 +147,14 @@ ${self.offset_prototype(field, qualified=True)} {
 
   % if not field.has_const_size():
 ${self.field_size_prototype(field, qualified=True)} {
-    % if field.get_size_field():
+    % if not field.is_repeated():
+  auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  auto io_vector_with_offset = io_vector;
+  io_vector_with_offset.consume(offset);
+  auto size = ${self.class_name(field.type, qualified=True)}::${
+      self.static_size_method_name(field.type)}(io_vector_with_offset);
+  return size;
+    % elif field.get_size_field():
   auto size = ${cpp_class_name}::${
       self.static_getter_name(field.get_size_field())}(io_vector);
   return size;
