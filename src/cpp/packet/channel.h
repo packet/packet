@@ -204,8 +204,11 @@ class Channel
 
     size_t consumed = 0;
 
+    assert(this->consumed <= this->written &&
+           "We have consumed more data than it's actually written.");
+
     packet_factory.read_packets(
-        &io_vector, size,
+        &io_vector, this->written - this->consumed,
         [&](const Packet& packet) { this->call_read_handler(packet); },
         &consumed);
 
