@@ -214,5 +214,21 @@ TEST(PacketGeneratorTest, ConstantSizedRepeatedField) {
   EXPECT_EQ(static_cast<size_t>(2), w_arr[1]);
 }
 
+TEST(PacketGeneratorTest, Offset) {
+  const size_t FIELD1_OFFSET = 4;
+  const size_t FIELD2_OFFSET = 4 + 2 + 4;
+  const uint16_t FIELD1_VAL = 0x1234;
+  const uint16_t FIELD2_VAL = 0xabcd;
+
+  simple::Offset offset;
+  offset.set_offset_field1(FIELD1_VAL);
+  offset.set_offset_field2(FIELD2_VAL);
+
+  EXPECT_EQ(FIELD1_VAL,
+            offset.get_io_vector()->read_data<uint16_t>(FIELD1_OFFSET));
+  EXPECT_EQ(FIELD2_VAL,
+            offset.get_io_vector()->read_data<uint16_t>(FIELD2_OFFSET));
+}
+
 }  // namespace packet
 

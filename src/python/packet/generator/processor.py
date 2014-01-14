@@ -55,12 +55,11 @@ class OffsetProcessor(ModelProcessor):
           packet.parent)
 
     for field in packet.fields:
-      if isinstance(field.type, BuiltInType):
-        offset_constant += field.type.length_in_bytes
-      elif field.type.is_const_size():
-        offset_constant += field.type.get_const_size()
+      if field.get_const_size():
+        offset_constant += field.get_const_size()
       else:
         intermediate_fields.append(field)
+
     return (offset_constant, intermediate_fields)
 
   def _process_packet(self, packet):  # pylint: disable=R0201
@@ -69,14 +68,15 @@ class OffsetProcessor(ModelProcessor):
         fields. For example, an offset of (2, [x, y]) means: 2 + x.len + y.len
         bytes. '''
     offset_constant, intermediate_fields = self._calculate_offset(packet.parent)
+
     for field in packet.fields:
       field.offset = (offset_constant, list(intermediate_fields))
-      if isinstance(field.type, BuiltInType):
-        offset_constant = offset_constant + field.type.length_in_bytes
-      elif field.type.is_const_size():
-        offset_constant += field.type.get_const_size()
+
+      if field.get_const_size():
+        offset_constant += field.get_const_size()
       else:
         intermediate_fields.append(field)
+
 
 class SizeProcessor(ModelProcessor):
   ''' Validates packets and makes sure they have a size field, and it is not

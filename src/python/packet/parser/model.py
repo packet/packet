@@ -365,7 +365,7 @@ class Field(object):  # pylint: disable=R0903
     self.type = self._find_type('.'.join(field.field_type.values))
     self.offset = [0, ()]
     # Stores the meta data about repreated fields (ie., arrays) in the following
-    # form: (SIZE_FIELD, COUNT_FIELD, COUNT)
+    #form : (SIZE_FIELD, COUNT_FIELD, COUNT)
     self.repeated_info = None
     self.annotations = {}
 
@@ -415,6 +415,17 @@ class Field(object):  # pylint: disable=R0903
   def get_repeated_count(self):
     ''' Returns the constant count of a const-size repreated field. '''
     return self.repeated_info.count if self.repeated_info else None
+
+  def get_const_size(self):
+    ''' Returns the length of the field in bytes. None if can't be found. '''
+    if not self.is_repeated() and self.has_const_size():
+      return self.type.get_const_size()
+
+    if self.is_const_size_repeated():
+      count = self.repeated_info.count
+      return self.type.get_const_size() * count
+
+    return None
 
   def _find_type(self, type_name):
     ''' Finds the type. '''

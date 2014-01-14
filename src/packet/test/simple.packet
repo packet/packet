@@ -51,4 +51,12 @@ enum MathExpression {
 packet MathExpressionPacket(SimpleParent) {
 }
 
+packet Offset {
+  @repeated(count = 2) uint8 pad1;
+  @repeated(count = 2) uint8 pad2;
+  uint16 offset_field1;
+  @repeated(count = 2) uint8 pad3;
+  @repeated(count = 2) uint8 pad4;
+  uint16 offset_field2;
+}
 

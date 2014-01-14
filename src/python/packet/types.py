@@ -30,6 +30,14 @@ class BuiltInType(object):  # pylint: disable=R0903
     self.length_in_bytes = length_in_bytes
     builtin_types[name] = self
 
+  def get_const_size(self):
+    ''' For API consistency with Packets. '''
+    return self.length_in_bytes
+
+  def is_const_size(self):  # pylint: disable=R0201
+    ''' For API consistency with Packets. '''
+    return True
+
 UNSIGNED_INT_8 = BuiltInType('uint8', 'unsigned byte.', 1)
 INT_8 = BuiltInType('int8', 'a signed byte.', 1)
 CHAR = BuiltInType('char', 'an alias for int8.', 1)
