@@ -60,3 +60,8 @@ packet Offset {
   uint16 offset_field2;
 }
 
+@padded(multiple = 8)
+packet Padded {
+  uint8 test;
+}
+

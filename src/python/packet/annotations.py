@@ -107,6 +107,21 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
       cond.append((field, param.value))
     return cond
 
+@packet_level_annotation('padded')  # pylint: disable=R0903
+class PaddedAnnotation(PacketLevelAnnotation):
+  ''' Padded is used for padded structures. It has two parameters:
+      1) multiple: The structure length should be padded to be a multiple of
+        "multiple".
+      2) excluded: Whether to include the paddings in packet's size. '''
+  def __init__(self, packet, model):
+    PacketLevelAnnotation.__init__(self, packet, model)
+    self.excluded = False
+    for param in self._model.params:
+      if param.name == 'multiple':
+        self.multiple = int(param.value)
+      elif param.name == 'excluded':
+        self.excluded = param.value.lower() == 'true'
+
 @packet_level_annotation('bigendian')  # pylint: disable=R0903
 class EndianAnnotation(PacketLevelAnnotation):
   ''' Used for annotate big endian packets.

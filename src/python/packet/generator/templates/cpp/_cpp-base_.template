@@ -58,6 +58,16 @@ namespace ${self.namespace_name(pom)} {\
                                      field.repeated_info)}
 </%def>
 
+<%def name="invoke_field_static_getter(packet, field)"
+    buffered="True" filter="trim">
+  ${self.class_name(field.packet)}::${self.static_getter_name(field)}
+</%def>
+
+<%def name="invoke_field_static_setter(packet, field)"
+    buffered="True" filter="trim">
+  ${self.class_name(field.packet)}::${self.static_setter_name(field)}
+</%def>
+
 <%def name="get_parent(packet)" buffered="True" filter="trim">
 % if packet.parent:
   ${self.class_name(packet.parent, qualified=True)}

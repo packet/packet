@@ -355,6 +355,14 @@ class Packet(object):  # pylint: disable=R0902,R0903
       conditions += self.parent.get_type_selector_condition(recursive)
     return conditions
 
+  def get_padding_info(self):
+    ''' Returns the padding information of the class. '''
+    return self.annotations.get('padded')
+
+  def is_padded(self):
+    ''' Whether the packet is padded. '''
+    return self.get_padding_info() != None
+
 class Field(object):  # pylint: disable=R0903
   ''' Represents a field. '''
   def __init__(self, pkt, field):
