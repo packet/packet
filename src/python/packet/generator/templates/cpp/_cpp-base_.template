@@ -328,6 +328,40 @@ namespace ${self.namespace_name(pom)} {\
   </%self:method_prototype>
 </%def>
 
+<%def name="get_padding_multiple_prototype(packet, qualified=False)"
+      buffered="True" filter="trim">
+  <%self:method_prototype qualified="${qualified}" const="True">
+    <%def name="return_type()" filter="trim">
+      size_t
+    </%def>
+    <%def name="method_name()" filter="trim">
+      get_padding_multiple
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+    </%def>
+  </%self:method_prototype>
+</%def>
+
+<%def name="is_padding_excluded_prototype(packet, qualified=False)"
+      buffered="True" filter="trim">
+  <%self:method_prototype qualified="${qualified}" const="True">
+    <%def name="return_type()" filter="trim">
+      bool
+    </%def>
+    <%def name="method_name()" filter="trim">
+      is_padding_excluded_prototype
+    </%def>
+    <%def name="class_name()" filter="trim">
+      ${self.class_name(packet)}
+    </%def>
+    <%def name="args()" filter="trim">
+    </%def>
+  </%self:method_prototype>
+</%def>
+
 <%def name="field_size_method_name(field)" buffered="True" filter="trim">
   ${field.name}_size_
 </%def>

@@ -57,6 +57,16 @@ class Packet {
     return vector.size();
   }
 
+  virtual size_t get_padding_multiple() const {
+    return 0;
+  }
+
+  virtual size_t is_padding_excluded() const {
+    return false;
+  }
+
+  virtual void pad() {}
+
   const IoVector* get_io_vector() const {
     return &vector;
   }
@@ -69,9 +79,19 @@ class Packet {
 
   void set_metadata(MetaData md) { vector.set_metadata(md); }
 
+  static size_t get_padded_size(size_t real_size, size_t multiple) const;
+
  protected:
   IoVector vector;
 };
+
+size_t Packet::get_padded_size(size_t real_size, size_t multiple) {
+  if (multiple == 0) {
+    return real_size;
+  }
+
+  return ((real_size + multiple - 1) / multiple) * multiple;
+}
 
 template <typename Packet>
 Packet make_packet(const IoVector& io_vec) {

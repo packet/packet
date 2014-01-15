@@ -192,21 +192,25 @@ ${self.static_size_prototype(packet, qualified=True)} {
     % if not packet.is_padded():
   return size;
     % else:
-  auto padded_size = packet::Packet::padded_size(size);
-      % if packet.get_padding_info().excluded:
-  return padded_size;
-      % else:
-  if (size != padded_size) {
-    ${self.invoke_field_static_setter(packet.get_size_field().packet,
-        packet.get_size_field())}(padded_size, io_vector);
-  }
-  return padded_size;
-      % endif
+  return packet::Packet::get_padded_size(size,
+                                         ${packet.get_padding_info().multiple});
     % endif
   % endif
 }
 
 % endfor
+
+% if packet.is_padded():
+${self.get_padding_multiple_prototype(packet, qualified=True)} {
+  return ${packet.get_padding_info().multiple};
+}
+
+% if packet.get_padding_info().excluded:
+${self.is_padding_excluded_prototype(packet, qualified=True)} {
+  return true;
+}
+% endif
+% endif
 </%block>
 <%block name="footer">
 </%block>
