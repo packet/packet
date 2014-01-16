@@ -60,12 +60,12 @@ packet Offset {
   uint16 offset_field2;
 }
 
-@padded(multiple = 8)
+@padded(multiple = 0x8)
 packet Padded {
   @size uint8 len;
 }
 
-@padded(multiple = 8, excluded = 1)
+@padded(multiple = 0x08, excluded = "false")
 packet PaddedExcluded {
   @size uint8 len;
 }
