@@ -206,18 +206,14 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="setter_arg(field)" buffered="True" filter="trim">
-  % if not field.is_repeated():
-    % if isinstance(field.type, BuiltInType):
-      ${self.type_name(field.type)} ${field.name}
-    % else:
-      ${self.type_name(field.type, const=True,
-                       variant=TYPE_VARIANTS.REFERENCE)} ${field.name}
-    % endif
-  % elif not field.is_dynamic_repeated():
-  ${self.type_name(field.type, variant=TYPE_VARIANTS.REFERENCE,
-                   repeated_info=field.repeated_info)} ${field.name}
+  % if field.is_const_size_repeated():
+    const ${self.type_name(field.type, variant=TYPE_VARIANTS.REFERENCE,
+                           repeated_info=field.repeated_info)} ${field.name}
+  % elif isinstance(field.type, BuiltInType):
+    ${self.type_name(field.type)} ${field.name}
   % else:
-  ${self.type_name(field.type, variant=TYPE_VARIANTS.RVALUE)} ${field.name}
+    ${self.type_name(field.type, const=True,
+                     variant=TYPE_VARIANTS.REFERENCE)} ${field.name}
   % endif
 </%def>
 
