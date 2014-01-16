@@ -352,7 +352,7 @@ namespace ${self.namespace_name(pom)} {\
       bool
     </%def>
     <%def name="method_name()" filter="trim">
-      is_padding_excluded_prototype
+      is_padding_excluded
     </%def>
     <%def name="class_name()" filter="trim">
       ${self.class_name(packet)}

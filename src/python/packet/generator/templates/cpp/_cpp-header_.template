@@ -60,9 +60,9 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 
 % if packet.is_padded():
   ${self.get_padding_multiple_prototype(packet)} override;
-% if packet.get_padding_info().excluded:
+  % if packet.get_padding_info().excluded:
   ${self.is_padding_excluded_prototype(packet)} override;
-% endif
+  % endif
 % endif
 
 % for field in packet.fields:

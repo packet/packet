@@ -62,6 +62,17 @@ packet Offset {
 
 @padded(multiple = 8)
 packet Padded {
-  uint8 test;
+  @size uint8 len;
+}
+
+@padded(multiple = 8, excluded = 1)
+packet PaddedExcluded {
+  @size uint8 len;
+}
+
+packet PaddedIncluder {
+  @size uint8 len;
+  Padded padded;
+  PaddedExcluded padded_excluded;
 }
 

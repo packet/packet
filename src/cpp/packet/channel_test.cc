@@ -42,6 +42,13 @@
 
 namespace packet {
 
+using simple::AnotherSimple;
+using simple::Simple;
+using simple::SimpleParent;
+using simple::YetAnotherSimple;
+using simple::YetYetAnotherSimple;
+
+using std::move;
 using std::shared_ptr;
 using std::unique_ptr;
 
@@ -193,7 +200,7 @@ TEST(ChannelTest, WritePackets) {
   const uint8_t ID = 2;
   DummyPacket w_p(2);
   w_p.set_id(ID);
-  EXPECT_TRUE(dummy_channel->write(std::move(w_p)));
+  EXPECT_TRUE(dummy_channel->write(move(w_p)));
   EXPECT_EQ(size_t(1), dummy_channel->out_buffer.guess_size());
 
   DummyPacket r_p(2);
@@ -221,7 +228,7 @@ TEST(ChannelTest, WritePacketsPerCpu) {
 
       DummyPacket w_p(2);
       w_p.set_id(ID);
-      EXPECT_TRUE(dummy_channel->write(std::move(w_p)));
+      EXPECT_TRUE(dummy_channel->write(move(w_p)));
       EXPECT_EQ(size_t(1), dummy_channel->out_buffer.guess_size(i));
     }).join();
   }
@@ -427,12 +434,6 @@ TEST(ChannelIntegration, ReliableMessaging) {
   th_listener.join();
 }
 
-using simple::AnotherSimple;
-using simple::Simple;
-using simple::SimpleParent;
-using simple::YetAnotherSimple;
-using simple::YetYetAnotherSimple;
-
 YetAnotherSimple make_yet_another_simple(int simples_count) {
   YetAnotherSimple container(100);
   for (auto i = 0; i < simples_count; i++) {
@@ -444,7 +445,9 @@ YetAnotherSimple make_yet_another_simple(int simples_count) {
 YetYetAnotherSimple make_yetyet_another_simple(int a_count) {
   YetYetAnotherSimple container(100);
   for (auto i = 0; i < a_count; i++) {
-    container.add_a(AnotherSimple(10));
+    auto a = AnotherSimple(10);
+    a.set_y(Simple());
+    container.add_a(move(a));
   }
   return container;
 }

@@ -154,10 +154,12 @@ TEST(PacketGeneratorTest, PacketInitilizer) {
   EXPECT_EQ(static_cast<uint8_t>(1), simple1.get_x());
 
   simple::AnotherSimple another_simple(10);
+  another_simple.set_y(simple1);
   EXPECT_EQ(static_cast<uint8_t>(1), another_simple.get_c());
   EXPECT_EQ(static_cast<uint8_t>(3), another_simple.get_l());
 
   simple::AnotherSimple another_simple2(100);
+  another_simple2.set_y(simple1);
   EXPECT_EQ(static_cast<size_t>(3), another_simple2.size());
 
   simple::YetYetAnotherSimple yyanother_simple(100);
@@ -228,6 +230,25 @@ TEST(PacketGeneratorTest, Offset) {
             offset.get_io_vector()->read_data<uint16_t>(FIELD1_OFFSET));
   EXPECT_EQ(FIELD2_VAL,
             offset.get_io_vector()->read_data<uint16_t>(FIELD2_OFFSET));
+}
+
+TEST(PacketGeneratorTest, Padding) {
+  simple::Padded padded(8);
+  EXPECT_EQ(size_t(8), padded.size());
+
+  simple::PaddedExcluded padded_ex(8);
+  EXPECT_EQ(size_t(8), padded.size());
+
+  simple::PaddedIncluder includer(17);
+  EXPECT_EQ(size_t(1), includer.size());
+
+  includer.set_padded(padded);
+  EXPECT_EQ(size_t(8), includer.get_padded().get_len());
+  EXPECT_EQ(size_t(9), includer.size());
+
+  includer.set_padded_excluded(padded_ex);
+  EXPECT_EQ(size_t(1), includer.get_padded_excluded().get_len());
+  EXPECT_EQ(size_t(17), includer.size());
 }
 
 }  // namespace packet

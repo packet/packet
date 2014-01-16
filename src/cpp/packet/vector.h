@@ -135,7 +135,7 @@ class IoVector final {
 
   void expand(size_t delta_size, size_t consumed_size) {
     auto remainder = this->size() - consumed_size;
-    if (remainder > delta_size) {
+    if (remainder >= delta_size) {
       // We have enough room for the new data.
       return;
     }

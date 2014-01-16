@@ -104,7 +104,7 @@ class SizeProcessor(ModelProcessor):
     min_size = self._calculate_min_size_in_packet(packet.parent)
     for field in packet.fields:
       # These fields are implicitly sized.
-      if field.is_dynamic_repeated():
+      if not field.has_const_size():
         continue
 
       size = field.type.length_in_bytes if isinstance(field.type, BuiltInType) \

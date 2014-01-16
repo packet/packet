@@ -99,7 +99,14 @@ ${self.static_setter_prototype(field, qualified=True)} {
   % if field.has_const_size():
   io_vector.write_data<${cpp_type_name}, ${big_endian}>(${field.name}, offset);
   % else:
+    % if field.is_repeated():
   offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
+    % else:
+  auto prev_size = ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
+  assert(prev_size == 0 &&
+         "Field ${field.name} is set twice. This is not supported.");
+    % endif
+
     % if isinstance(field.type, BuiltInType):
   auto element_size = sizeof(${self.type_name(field.type)});
     % else:
@@ -133,6 +140,15 @@ ${self.static_setter_prototype(field, qualified=True)} {
   ${self.class_name(field.get_count_field().packet)}::${
       self.static_setter_name(field.get_count_field())}(count + 1, io_vector);
     % endif
+
+    % if not isinstance(field.type, BuiltInType) and field.type.is_padded() \
+          and not field.type.get_padding_info().excluded:
+  packet::IoVector field_vector = io_vector;
+  field_vector.consume(offset);
+  ${self.class_name(field.type)}::${
+      self.static_setter_name(field.type.get_size_field())}(element_size,
+          field_vector);
+    % endif
   % endif
 }
 % endfor
@@ -151,6 +167,9 @@ ${self.offset_prototype(field, qualified=True)} {
 ${self.field_size_prototype(field, qualified=True)} {
     % if not field.is_repeated():
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
+  if (offset >= io_vector.size()) {
+    return 0;
+  }
   auto io_vector_with_offset = io_vector;
   io_vector_with_offset.consume(offset);
   auto size = ${self.class_name(field.type, qualified=True)}::${
@@ -198,8 +217,6 @@ ${self.static_size_prototype(packet, qualified=True)} {
   % endif
 }
 
-% endfor
-
 % if packet.is_padded():
 ${self.get_padding_multiple_prototype(packet, qualified=True)} {
   return ${packet.get_padding_info().multiple};
@@ -211,6 +228,9 @@ ${self.is_padding_excluded_prototype(packet, qualified=True)} {
 }
 % endif
 % endif
+
+% endfor
+
 </%block>
 <%block name="footer">
 </%block>

@@ -120,7 +120,7 @@ class PaddedAnnotation(PacketLevelAnnotation):
       if param.name == 'multiple':
         self.multiple = int(param.value)
       elif param.name == 'excluded':
-        self.excluded = param.value.lower() == 'true'
+        self.excluded = True
 
 @packet_level_annotation('bigendian')  # pylint: disable=R0903
 class EndianAnnotation(PacketLevelAnnotation):

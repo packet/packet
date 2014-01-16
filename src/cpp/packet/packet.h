@@ -61,7 +61,7 @@ class Packet {
     return 0;
   }
 
-  virtual size_t is_padding_excluded() const {
+  virtual bool is_padding_excluded() const {
     return false;
   }
 
@@ -79,13 +79,13 @@ class Packet {
 
   void set_metadata(MetaData md) { vector.set_metadata(md); }
 
-  static size_t get_padded_size(size_t real_size, size_t multiple) const;
+  static size_t get_padded_size(size_t real_size, size_t multiple);
 
  protected:
   IoVector vector;
 };
 
-size_t Packet::get_padded_size(size_t real_size, size_t multiple) {
+inline size_t Packet::get_padded_size(size_t real_size, size_t multiple) {
   if (multiple == 0) {
     return real_size;
   }
