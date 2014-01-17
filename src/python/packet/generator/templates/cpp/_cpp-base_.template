@@ -281,6 +281,15 @@ namespace ${self.namespace_name(pom)} {\
   </%self:method_prototype>
 </%def>
 
+<%def name="invoke_static_size(packet)" buffered="True" filter="trim">
+  % if packet.is_padded():
+    ${self.class_name(packet.get_size_field().packet)}::${
+        self.static_getter_name(packet.get_size_field())}
+  % else:
+    ${self.class_name(packet)}::${self.static_size_method_name(packet)}
+  % endif
+</%def>
+
 <%def name="static_size_method_name(packet)" buffered="True" filter="trim">
   size_
 </%def>

@@ -38,6 +38,11 @@ class BuiltInType(object):  # pylint: disable=R0903
     ''' For API consistency with Packets. '''
     return True
 
+  def is_padded(self):  # pylint: disable=R0201
+    ''' For API consistency with Packets. '''
+    return False
+
+
 UNSIGNED_INT_8 = BuiltInType('uint8', 'unsigned byte.', 1)
 INT_8 = BuiltInType('int8', 'a signed byte.', 1)
 CHAR = BuiltInType('char', 'an alias for int8.', 1)

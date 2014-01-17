@@ -113,8 +113,7 @@ ${self.static_setter_prototype(field, qualified=True)} {
   auto element_size = ${field.name}.${self.size_method_name(field.packet)}();
     % endif
 
-  auto packet_size = ${self.class_name(packet.get_size_field().packet)}::${
-      self.static_getter_name(packet.get_size_field())}(io_vector);
+  auto packet_size = ${self.invoke_static_size(packet)}(io_vector);
 
   io_vector.open_gap(offset, element_size, packet_size);
   io_vector.write_data<${self.type_name(field.type)}, ${big_endian}>(${
@@ -141,8 +140,7 @@ ${self.static_setter_prototype(field, qualified=True)} {
       self.static_setter_name(field.get_count_field())}(count + 1, io_vector);
     % endif
 
-    % if not isinstance(field.type, BuiltInType) and field.type.is_padded() \
-          and not field.type.get_padding_info().excluded:
+    % if field.type.is_padded() and not field.type.get_padding_info().excluded:
   packet::IoVector field_vector = io_vector;
   field_vector.consume(offset);
   ${self.class_name(field.type)}::${
@@ -182,8 +180,7 @@ ${self.field_size_prototype(field, qualified=True)} {
     % else:
   auto offset = ${cpp_class_name}::${self.offset_method_name(field)}(io_vector);
       % if field.has_implicit_size():
-  auto size = ${self.class_name(packet.get_size_field().packet)}::${
-      self.static_getter_name(packet.get_size_field())}(io_vector);
+  auto size = ${self.invoke_static_size(packet)}(io_vector);
   return size - offset;
       % elif field.get_count_field():
   auto size = std::numeric_limits<std::size_t>::max();
