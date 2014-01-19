@@ -36,9 +36,9 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
   % endfor
   };
 
-  ${self.lvalue_iovector_constructor_prototype(packet)};
-  ${self.rvalue_iovector_constructor_prototype(packet)};
-  ${self.size_constructor_prototype(packet, packet.min_size)};
+  explicit ${self.lvalue_iovector_constructor_prototype(packet)};
+  explicit ${self.rvalue_iovector_constructor_prototype(packet)};
+  explicit ${self.size_constructor_prototype(packet, packet.min_size)};
 
   ${self.copy_constructor_prototype(packet)} = default;
   ${self.move_constructor_prototype(packet)} = default;
