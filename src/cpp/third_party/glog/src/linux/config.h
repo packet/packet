@@ -32,13 +32,13 @@
 /* #undef HAVE_LIBUNWIND_H */
 
 /* define if you have google gflags library */
-/* #undef HAVE_LIB_GFLAGS */
+#define HAVE_LIB_GFLAGS
 
 /* define if you have google gmock library */
-/* #undef HAVE_LIB_GMOCK */
+#define HAVE_LIB_GMOCK
 
 /* define if you have google gtest library */
-/* #undef HAVE_LIB_GTEST */
+#define HAVE_LIB_GTEST
 
 /* define if you have libunwind */
 /* #undef HAVE_LIB_UNWIND */

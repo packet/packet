@@ -115,6 +115,8 @@ SignalMaster* get_signal_master() {
   return &signal_master;
 }
 
+SignalMaster* leak_protection = get_signal_master();
+
 HandlerId register_cleanup_handler(::std::function<void()> cleanup_handler) {
   return get_signal_master()->add_cleanup_handler(cleanup_handler);
 }
