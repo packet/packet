@@ -197,7 +197,7 @@ class RingBuffer final {
   }
 
   size_t guess_size() const {
-    return capacity() - guess_free_space();
+    return ssize_t(capacity()) - ssize_t(guess_free_space());
   }
 
   size_t guess_free_space() const {
@@ -220,8 +220,9 @@ class RingBuffer final {
    *       simple difference, otherwise the circular difference.
    */
   size_t circular_diff(size_t first, size_t second) const {
-    return second > first ? masked(second) - masked(first) :
-        capacity() + masked(second) - masked(first);
+    return masked(second) > masked(first)
+               ? masked(second) - masked(first)
+               : capacity() + masked(second) - masked(first);
   }
 
   bool index_equal(size_t rhs, size_t lhs) const {
