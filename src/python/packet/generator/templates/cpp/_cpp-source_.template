@@ -102,8 +102,7 @@ ${self.static_setter_prototype(field, qualified=True)} {
     % if field.is_repeated():
   offset += ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
     % else:
-  auto prev_size = ${cpp_class_name}::${self.field_size_method_name(field)}(io_vector);
-  assert(prev_size == 0 &&
+  assert(${cpp_class_name}::${self.field_size_method_name(field)}(io_vector) == 0 &&
          "Field ${field.name} is set twice. This is not supported.");
     % endif
 
