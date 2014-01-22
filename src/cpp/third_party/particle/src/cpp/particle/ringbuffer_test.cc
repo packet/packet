@@ -48,6 +48,18 @@ using std::string;
 using std::thread;
 using std::vector;
 
+TEST(RingBuffer, GuessSize) {
+  const size_t capacity = 4096;
+  RingBuffer<int> ring_buffer(capacity);
+  for (size_t i = 0; i < capacity - 1; i++) {
+    ASSERT_TRUE(ring_buffer.try_write(1));
+  }
+
+  ASSERT_TRUE(ring_buffer.try_read());
+  ASSERT_TRUE(ring_buffer.try_write(1));
+  EXPECT_EQ(capacity - 1, ring_buffer.guess_size());
+}
+
 TEST(RingBuffer, SingleThreadedTest) {
   const size_t capacity = 128;
   RingBuffer<int> ring_buffer(capacity);
