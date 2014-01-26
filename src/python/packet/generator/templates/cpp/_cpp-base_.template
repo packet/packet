@@ -429,7 +429,7 @@ namespace ${self.namespace_name(pom)} {\
     <%def name="class_name()" filter="trim">
     </%def>
     <%def name="args()" filter="trim">
-      const ${self.class_name(packet.parent, qualified=True)}& parent
+      const packet::IoVector& io_vec
     </%def>
   </%self:method_prototype>
 </%def>
@@ -459,14 +459,15 @@ namespace ${self.namespace_name(pom)} {\
   </%self:method_prototype>
 </%def>
 
-<%def name="type_selector_cond(packet, var_name=None, is_pointer=False)" buffered="True" filter="trim">
+<%def name="type_selector_cond(packet, var_name=None, is_pointer=False, io_vec='io_vec')"
+    buffered="True" filter="trim">
   <%
     conditions = packet.get_type_selector_condition()
     assert conditions, 'Type selector cannot be empty for %s' % packet.name
   %>
   % for field, value in conditions:
     % if not var_name:
-  ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(io_vec) == ${value} &&
+  ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(${io_vec}) == ${value} &&
     % else:
   ${var_name}${'->' if is_pointer else '.'}${self.getter_name(field)}() == ${value} &&
     % endif

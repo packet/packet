@@ -133,6 +133,15 @@ class IoVector final {
     offset += size;
   }
 
+
+  void revert(size_t size) {
+    if (unlikely(offset < size)) {
+      throw NotEnoughDataException("Not enough data to move the position.");
+    }
+
+    offset -= size;
+  }
+
   void expand(size_t delta_size, size_t consumed_size) {
     auto remainder = this->size() - consumed_size;
     if (remainder >= delta_size) {
@@ -194,9 +203,11 @@ class IoVector final {
    * @param shared_vector The shared IO vector.
    * @param offset The offset in the shared IO vector.
    */
-  IoVector(const SharedIoVectorPtr& shared_vector, size_t offset = 0);
+  IoVector(const SharedIoVectorPtr& shared_vector, size_t offset = 0)
+      : shared_io_vector(shared_vector), offset(offset) {}
 
-  IoVector(SharedIoVectorPtr&& shared_vector, size_t offset = 0);
+  IoVector(SharedIoVectorPtr&& shared_vector, size_t offset = 0)
+      : shared_io_vector(std::move(shared_vector)), offset(offset) {}
 
   template <typename Data, bool is_big_endian>
   typename ::std::enable_if<std::is_base_of<Packet, Data>::value, Data>::type

@@ -480,7 +480,7 @@ TEST(ChannelIntegration, PingPongGeneratedPackets) {
     ChannelListener<SimpleParent> listener(packet_factory);
     listener.on_accept([&](const ChannelPtr& channel) {
       channel->on_read([&](const ChannelPtr& channel, const SimpleParent& pkt) {
-        auto is_pong = is_YetYetAnotherSimple(pkt);
+        auto is_pong = simple::is_YetYetAnotherSimple(*pkt.get_io_vector());
 
         if (is_pong) {
           check_yetyet_another_simple(cast_to_YetYetAnotherSimple(pkt));
@@ -511,7 +511,7 @@ TEST(ChannelIntegration, PingPongGeneratedPackets) {
     client.on_connect([&](const ChannelPtr& channel) {
       channel->on_read([&](const ChannelPtr& channel,
                            const SimpleParent& pkt) {
-        ASSERT_TRUE(is_YetYetAnotherSimple(pkt));
+        ASSERT_TRUE(simple::is_YetYetAnotherSimple(*pkt.get_io_vector()));
 
         check_yetyet_another_simple(cast_to_YetYetAnotherSimple(pkt));
         channel->write(make_yetyet_another_simple(2));

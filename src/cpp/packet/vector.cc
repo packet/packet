@@ -29,11 +29,5 @@
 
 namespace packet {
 
-IoVector::IoVector(const SharedIoVectorPtr& shared_vector, size_t offset)
-    : shared_io_vector(shared_vector), offset(offset) {}
-
-IoVector::IoVector(SharedIoVectorPtr&& shared_vector, size_t offset)
-    : shared_io_vector(std::move(shared_vector)), offset(offset) {}
-
 }  // namespace packet
 

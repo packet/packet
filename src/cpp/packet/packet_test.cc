@@ -72,7 +72,8 @@ TEST(PacketFactoryTest, DefaultSize) {
   auto io_vector = make_packet_iov(k_sections);
 
   auto factory = make_packet_factory<Packet, uint8_t>(0, false);
-  auto packets = factory.read_packets(&io_vector, io_vector.size());
+  auto size = io_vector.size();
+  auto packets = factory.read_packets(std::move(io_vector), size);
 
   EXPECT_EQ(k_sections, packets.size());
 }
@@ -91,7 +92,8 @@ TEST(PacketFactoryTest, PacketSize) {
   auto io_vector = make_packet_iov(k_sections);
 
   auto factory = make_packet_factory<TestPacket>();
-  auto packets = factory.read_packets(&io_vector, io_vector.size());
+  auto size = io_vector.size();
+  auto packets = factory.read_packets(std::move(io_vector), size);
 
   EXPECT_EQ(k_sections, packets.size());
 }
@@ -105,7 +107,8 @@ TEST(PacketFactoryTest, OutOfBoundReads) {
     io_vector.write_data<uint8_t>(2, i - 1);
 
     auto factory = make_packet_factory<TestPacket>();
-    auto packets = factory.read_packets(&io_vector, io_vector.size());
+    auto size = io_vector.size();
+    auto packets = factory.read_packets(std::move(io_vector), size);
 
     EXPECT_EQ(size_t(i - 1), packets.size());
   }

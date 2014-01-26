@@ -64,7 +64,7 @@ class Channel
    * Never use this constructor. It's just public because of std::make_shared.
    */
   explicit Channel(Factory packet_factory, uv_loop_t* loop,
-                   size_t out_buf_size = 2 << 12)
+                   size_t out_buf_size = 2 << 16)
       : std::enable_shared_from_this<Channel>(),
         io_vector(nullptr),
         written(0),
@@ -122,7 +122,7 @@ class Channel
    * @param read_handler The read handler.
    */
   void on_read(
-      std::function<void(const ChannelPtr&, const Packet&)> read_handler) {
+      std::function<void(const ChannelPtr&, Packet&&)> read_handler) {
     this->read_handler = read_handler;
   }
 
@@ -200,16 +200,15 @@ class Channel
     this->written += size;
     assert(io_vector->size() >= written);
 
-    IoVector io_vector(this->io_vector, this->consumed);
-
     size_t consumed = 0;
 
     assert(this->consumed <= this->written &&
            "We have consumed more data than it's actually written.");
 
     packet_factory.read_packets(
-        &io_vector, this->written - this->consumed,
-        [&](const Packet& packet) { this->call_read_handler(packet); },
+        IoVector(this->io_vector, this->consumed),
+        this->written - this->consumed,
+        [&](Packet&& packet) { this->call_read_handler(std::move(packet)); },
         &consumed);
 
     this->consumed += consumed;
@@ -358,12 +357,12 @@ class Channel
     do_close();
   }
 
-  void call_read_handler(const Packet& packet) {
+  void call_read_handler(Packet&& packet) {
     if (!read_handler) {
       return;
     }
 
-    read_handler(self, packet);
+    read_handler(self, std::move(packet));
   }
 
   void call_close_handler() {
@@ -406,7 +405,7 @@ class Channel
   // TODO(soheil): Write a light weight functor. We don't really need such a
   //               structure. Then explain why we didn't use std::fucntion,
   //               here.
-  std::function<void(const ChannelPtr&, const Packet&)> read_handler;
+  std::function<void(const ChannelPtr&, Packet&&)> read_handler;
   std::function<void(const ChannelPtr&)> error_handler;
   std::function<void(const ChannelPtr&)> close_handler;
 

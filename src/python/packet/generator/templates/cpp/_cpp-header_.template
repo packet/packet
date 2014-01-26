@@ -85,11 +85,11 @@ class ${cpp_class_name} : public ${self.get_parent(packet)} {
 % if packet.parent:
 
 inline ${self.is_child_prototype(packet)} {
-  return ${self.type_selector_cond(packet, var_name='parent')};
+  return ${self.type_selector_cond(packet, io_vec='io_vec')};
 }
 
 inline ${self.cast_to_child_prototype(packet)} {
-  assert(${self.is_child_method_name(packet)}(parent));
+  assert(${self.is_child_method_name(packet)}(*parent.get_io_vector()));
   return packet::make_packet<${self.class_name(packet)}>(parent);
 }
 
