@@ -29,6 +29,9 @@
       'include_dirs': [
         '<(glog_src_home)',
       ],
+      'dependencies': [
+        'gflags.gyp:gflags',
+      ],
       'all_dependent_settings': {
         'include_dirs': [
           '<(glog_src_home)',
