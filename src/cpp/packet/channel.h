@@ -152,11 +152,12 @@ class Channel
     }
 
     if (unlikely(!out_buffer.try_write(packet))) {
-      printf("error\n");
+      printf("error %zu\n", out_buffer.guess_size());
       return false;
     }
 
     uv_async_send(write_async);
+
     return true;
   }
 
@@ -213,35 +214,44 @@ class Channel
 
     this->consumed += consumed;
     assert(this->consumed <= written);
+
+    this->write_packets();
   }
 
   void write_packets() {
     size_t buffer_size = std::min((size_t) IOV_MAX, out_buffer.guess_size());
-    auto packets = new std::vector<Packet>();
-    packets->reserve(buffer_size);
 
-    size_t consumed = 0;
+    using Vectors = std::vector<typename packet::IoVector::SharedIoVectorPtr>;
+
+    auto vectors = new Vectors();
+    vectors->reserve(buffer_size);
+
+    uv_buf_t bufs[IOV_MAX];
+
     Packet packet(make_io_vector(nullptr));
     particle::CpuId last_cpu_id = 0;
-    for (; consumed < buffer_size; consumed++) {
+
+    size_t consumed = 0;
+    for (size_t j = 0; j < buffer_size; ++j) {
       if (!out_buffer.try_read(&packet, &last_cpu_id)) {
-        break;
+        sched_yield();
+        //printf("B\n");
+        continue;
       }
-      packets->push_back(std::move(packet));
+
+      bufs[consumed].base = packet.get_io_vector()->get_buf();
+      bufs[consumed].len = packet.size();
+
+      vectors->push_back(move(packet.get_io_vector()->shared_io_vector));
+      ++consumed;
     }
 
-    if (!consumed) {
+    if (consumed == 0) {
       return;
     }
 
     uv_write_t* write_req = new uv_write_t();
-    write_req->data = static_cast<void*>(packets);
-
-    uv_buf_t bufs[IOV_MAX];
-    for (size_t j = 0; j < consumed; j++) {
-      bufs[j].base = (*packets)[j].get_io_vector()->get_buf();
-      bufs[j].len = (*packets)[j].size();
-    }
+    write_req->data = static_cast<void*>(vectors);
 
     auto channel_after_write_cb = [](uv_write_t* req, int status) {
       if (status == UV_ECANCELED) {
@@ -253,8 +263,8 @@ class Channel
       }
 
 
-      auto packets = static_cast<std::vector<Packet>*>(req->data);
-      delete packets;
+      auto vectors = static_cast<Vectors*>(req->data);
+      delete vectors;
       delete req;
     };
 
@@ -262,7 +272,7 @@ class Channel
         uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,
                  consumed, channel_after_write_cb)) {
       LOG(ERROR) << "Error in write.\n";
-      delete packets;
+      delete vectors;
       delete write_req;
     }
   }
@@ -435,7 +445,7 @@ template <typename Packet, typename Factory>
 const size_t Channel<Packet, Factory>::VECTOR_SIZE = 8 * 1024 - 8;
 
 template <typename Packet, typename Factory>
-const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 2048;
+const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 4096;
 
 template <typename Packet, typename Factory, typename... Args>
 std::shared_ptr<Channel<Packet, Factory>> make_channel(Factory factory,
