@@ -65,8 +65,6 @@ class Packet {
     return false;
   }
 
-  virtual void pad() {}
-
   const IoVector* get_io_vector() const {
     return &vector;
   }

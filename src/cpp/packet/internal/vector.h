@@ -53,34 +53,12 @@ class IoVector final {
   typedef uint64_t MetaData;
   typedef size_t RefCount;
 
-  /**
-   * @param channel The packet channel that this IO vector is attached to.
-   * @param size Buffer size. Must be more than 0.
-   * Note: Do not use this construtor directly. Use make_shared_io_vector
-   *       instead.
-   */
-  explicit IoVector(size_t size)
-      : IoVector(static_cast<char *>(malloc(size)), size) {}
-
-  IoVector(char* buf, size_t size)
-      : buf(buf), buf_size(size), metadata(0), ref_count(0) {
-    assert(buf != nullptr);
-  }
-
-  // Not default copyable.
+  // Not copyable nor movable.
   IoVector(const IoVector&) = delete;
+  IoVector(IoVector&&) = delete;
+
   IoVector& operator=(const IoVector&) = delete;
-
-  // Default movable.
-  IoVector(IoVector&&) = default;
-  IoVector& operator=(IoVector&&) = default;
-
-  ~IoVector() {
-    if (unlikely(buf == nullptr)) {
-      return;
-    }
-    free(buf);
-  }
+  IoVector& operator=(IoVector&&) = delete;
 
   /** Returns the io vectors. */
   char* get_buf(size_t offset = 0) {
@@ -124,6 +102,11 @@ class IoVector final {
                       size_t size);
 
  private:
+  IoVector(char* buf, size_t size)
+      : buf(buf), buf_size(size), metadata(0), ref_count(0) {
+    assert(buf != nullptr);
+  }
+
   char* buf;
   size_t buf_size;
 
@@ -138,6 +121,7 @@ class IoVector final {
 
   friend void intrusive_ptr_add_ref(IoVector* vector);
   friend void intrusive_ptr_release(IoVector* vector);
+  friend boost::intrusive_ptr<IoVector> make_shared_io_vector(size_t size);
 
   FRIEND_TEST(IoVector, ThreadSafety);
 };
@@ -149,13 +133,18 @@ inline void intrusive_ptr_add_ref(packet::internal::IoVector* vector) {
 inline void intrusive_ptr_release(packet::internal::IoVector* vector) {
   if (vector->release(1, std::memory_order_release) == 0) {
     std::atomic_thread_fence(std::memory_order_acquire);
-    delete(vector);
+    free(static_cast<void*>(vector));
   }
 }
 
-template <typename... Args>
-boost::intrusive_ptr<IoVector> make_shared_io_vector(Args... args) {
-  return boost::intrusive_ptr<IoVector>(new IoVector(args...));
+inline boost::intrusive_ptr<IoVector> make_shared_io_vector(size_t size) {
+  auto chunk = static_cast<char*>(malloc(sizeof(IoVector) + size));
+  if (unlikely(chunk == nullptr)) {
+    return boost::intrusive_ptr<IoVector>();
+  }
+
+  return boost::intrusive_ptr<IoVector>(
+      new (chunk) IoVector(chunk + sizeof(IoVector), size));  // NOLINT
 }
 
 }  // namespace internal

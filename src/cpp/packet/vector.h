@@ -224,8 +224,8 @@ class IoVector final {
       throw NotEnoughDataException("Read exceeds buffer size.");
     }
 
-    const Data* data = (const Data*) get_buf(offset);
-    return is_big_endian ? particle::ntohxx(*(data)) : *(data);
+    Data data = *((const Data*) get_buf(offset));
+    return is_big_endian ? particle::ntohxx(data) : data;
   }
 
   template <typename Data, bool is_big_endian>
@@ -258,7 +258,7 @@ class IoVector final {
       throw NotEnoughDataException("No space available.");
     }
 
-    auto d = is_big_endian ? particle::ntohxx(data) : data;
+    Data d = is_big_endian ? particle::ntohxx(data) : data;
     std::memmove(get_buf(offset), &d, sizeof(d));
   }
 
@@ -297,7 +297,7 @@ class IoVector final {
 
   bool resides_in_buffer(size_t offset, size_t size) const {
     // TODO(soheil): Is this valnurable to overflows?
-    return shared_io_vector->size() >= this->offset + offset + size;
+    return this->shared_io_vector->size() >= this->offset + offset + size;
   }
 
   SharedIoVectorPtr get_shared_vector() { return shared_io_vector; }

@@ -432,7 +432,7 @@ class Channel
 };
 
 template <typename Packet, typename Factory>
-const size_t Channel<Packet, Factory>::VECTOR_SIZE = 4 * 1024 - 8;
+const size_t Channel<Packet, Factory>::VECTOR_SIZE = 8 * 1024 - 8;
 
 template <typename Packet, typename Factory>
 const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 2048;
