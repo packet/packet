@@ -38,8 +38,6 @@ ${cpp_class_name}::${self.size_constructor_prototype(packet)}
   ${self.init_method_name(packet)}();
 }
 
-${cpp_class_name}::~${cpp_class_name}() {}
-
 ${self.init_method_prototype(packet, qualified=True)} {
   % if not packet.is_const_size():
   ${cpp_class_name}::${self.setter_name(packet.get_size_field())}(MIN_SIZE);

@@ -51,7 +51,7 @@ class Packet {
   Packet& operator=(const Packet&) = default;
   Packet& operator=(Packet&&) = default;
 
-  virtual ~Packet() {}
+  // virtual ~Packet() {}
 
   virtual size_t size() const {
     return vector.size();
