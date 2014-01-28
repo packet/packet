@@ -326,7 +326,7 @@ class Channel
     }
 
     buf->base = io_vector->get_buf(written);
-    buf->len = std::min(io_vector->size() - written, MAX_READ_SIZE);
+    buf->len = std::min(io_vector->size() - written, VECTOR_SIZE);
   }
 
   void start() {
