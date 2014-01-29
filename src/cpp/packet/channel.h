@@ -220,6 +220,9 @@ class Channel
 
   void write_packets() {
     size_t buffer_size = std::min((size_t) IOV_MAX, out_buffer.guess_size());
+    if (buffer_size == 0) {
+      return;
+    }
 
     using Vectors = std::vector<typename packet::IoVector::SharedIoVectorPtr>;
 
@@ -235,23 +238,20 @@ class Channel
     for (size_t j = 0; j < buffer_size; ++j) {
       if (!out_buffer.try_read(&packet, &last_cpu_id)) {
         sched_yield();
-        //printf("B\n");
         continue;
       }
 
       bufs[consumed].base = packet.get_io_vector()->get_buf();
       bufs[consumed].len = packet.size();
 
-      vectors->push_back(move(packet.get_io_vector()->shared_io_vector));
+      vectors->push_back(std::move(packet.get_io_vector()->shared_io_vector));
       ++consumed;
     }
 
     if (consumed == 0) {
+      delete vectors;
       return;
     }
-
-    uv_write_t* write_req = new uv_write_t();
-    write_req->data = static_cast<void*>(vectors);
 
     auto channel_after_write_cb = [](uv_write_t* req, int status) {
       if (status == UV_ECANCELED) {
@@ -267,6 +267,9 @@ class Channel
       delete vectors;
       delete req;
     };
+
+    uv_write_t* write_req = new uv_write_t();
+    write_req->data = static_cast<void*>(vectors);
 
     if (is_closed() ||
         uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,

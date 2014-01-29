@@ -112,11 +112,11 @@ TEST(ChannelTest, Allocation) {
   uv_buf_t buf;
   dummy_channel->allocate_uv_buf(buffer_size, &buf);
   EXPECT_NE(nullptr, buf.base);
-  EXPECT_EQ(Channel<DummyPacket>::MAX_READ_SIZE, buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE, buf.len);
 
   dummy_channel->allocate_uv_buf(buffer_size, &buf);
   EXPECT_NE(nullptr, buf.base);
-  EXPECT_EQ(Channel<DummyPacket>::MAX_READ_SIZE, buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE, buf.len);
 
   dummy_channel->written += Channel<DummyPacket>::VECTOR_SIZE - 1;
 
@@ -133,7 +133,7 @@ TEST(ChannelTest, Allocation) {
   dummy_channel->allocate_uv_buf(1, &buf);
   EXPECT_NE(nullptr, buf.base);
   EXPECT_NE(old_vector, dummy_channel->io_vector);
-  EXPECT_EQ(buffer_size, buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE, buf.len);
   EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE,
             dummy_channel->io_vector->size());
 
@@ -145,7 +145,7 @@ TEST(ChannelTest, Allocation) {
   dummy_channel->allocate_uv_buf(1, &buf);
   EXPECT_NE(nullptr, buf.base);
   EXPECT_NE(old_vector, dummy_channel->io_vector);
-  EXPECT_EQ(buffer_size, buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE, buf.len);
   EXPECT_NE(Channel<DummyPacket>::VECTOR_SIZE,
             dummy_channel->io_vector->size());
 
@@ -167,7 +167,7 @@ TEST(ChannelTest, ReadPackets) {
 
   dummy_channel->allocate_uv_buf(buffer_size, &buf);
 
-  EXPECT_TRUE(buf.len <= Channel<DummyPacket>::MAX_READ_SIZE);
+  EXPECT_TRUE(buf.len <= Channel<DummyPacket>::VECTOR_SIZE);
 
   std::memset(buf.base, packet_size, buffer_size);
 
