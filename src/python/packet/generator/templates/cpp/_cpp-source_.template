@@ -76,8 +76,10 @@ ${self.static_getter_prototype(field, qualified=True)} {
 
   return io_vector.read_repeated_data<${self.type_name(field.type)}, ${
       big_endian}>(offset, count, size);
-  % else:
+  % elif packet.is_const_size() or field == packet.get_size_field():
   return io_vector.read_data<${cpp_type_name}, ${big_endian}>(offset);
+  % else:
+  return io_vector.read_data<${cpp_type_name}, ${big_endian}, false>(offset);
   % endif
 }
 

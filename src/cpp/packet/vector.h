@@ -75,9 +75,9 @@ class IoVector final {
     return shared_io_vector->size() - offset;
   }
 
-  template <typename Data, bool is_big_endian = false>
+  template <typename Data, bool is_big_endian = false, bool safe = true>
   Data read_data(size_t offset = 0) const {
-    return do_read_data<Data, is_big_endian>(offset);
+    return do_read_data<Data, is_big_endian, safe>(offset);
   }
 
   template <typename Data, bool is_big_endian = false>
@@ -209,7 +209,7 @@ class IoVector final {
   IoVector(SharedIoVectorPtr&& shared_vector, size_t offset = 0)
       : shared_io_vector(std::move(shared_vector)), offset(offset) {}
 
-  template <typename Data, bool is_big_endian>
+  template <typename Data, bool is_big_endian, bool safe>
   typename ::std::enable_if<std::is_base_of<Packet, Data>::value, Data>::type
   do_read_data(size_t offset) const {
     IoVector new_vec(*this);
@@ -217,10 +217,10 @@ class IoVector final {
     return make_packet<Data>(new_vec);
   }
 
-  template <typename Data, bool is_big_endian>
+  template <typename Data, bool is_big_endian, bool safe>
   typename ::std::enable_if<std::is_integral<Data>::value, Data>::type
   do_read_data(size_t offset) const {
-    if (unlikely(!resides_in_buffer(offset, sizeof(Data)))) {
+    if (unlikely(safe && !resides_in_buffer(offset, sizeof(Data)))) {
       throw NotEnoughDataException("Read exceeds buffer size.");
     }
 
@@ -228,12 +228,13 @@ class IoVector final {
     return is_big_endian ? particle::ntohxx(data) : data;
   }
 
-  template <typename Data, bool is_big_endian>
+  template <typename Data, bool is_big_endian, bool safe>
   typename ::std::enable_if<particle::is_std_array<Data>::value, Data>::type
   do_read_data(size_t offset) const {
     const size_t no_of_elements = std::tuple_size<Data>::value;
     const size_t element_size = sizeof(typename Data::value_type);
-    if (unlikely(!resides_in_buffer(offset, element_size * no_of_elements))) {
+    if (unlikely(safe &&
+                 !resides_in_buffer(offset, element_size * no_of_elements))) {
       throw NotEnoughDataException("Read exceeds buffer size.");
     }
 
