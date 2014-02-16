@@ -143,10 +143,21 @@ TEST(ChannelTest, Allocation) {
   dummy_channel->consumed = 0;
 
   dummy_channel->allocate_uv_buf(1, &buf);
+  EXPECT_EQ(nullptr, buf.base);
+
+  auto expand_threshold = Channel<DummyPacket>::expand_threshhold();
+  dummy_channel->consumed = expand_threshold - 1;
+
+  dummy_channel->allocate_uv_buf(1, &buf);
+  EXPECT_EQ(nullptr, buf.base);
+
+  dummy_channel->consumed = expand_threshold;
+
+  dummy_channel->allocate_uv_buf(1, &buf);
   EXPECT_NE(nullptr, buf.base);
   EXPECT_NE(old_vector, dummy_channel->io_vector);
-  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE, buf.len);
-  EXPECT_NE(Channel<DummyPacket>::VECTOR_SIZE,
+  EXPECT_EQ(expand_threshold, buf.len);
+  EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE,
             dummy_channel->io_vector->size());
 
   uv_loop_delete(loop);

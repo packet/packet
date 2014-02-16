@@ -138,7 +138,7 @@ inline void intrusive_ptr_release(packet::internal::IoVector* vector) {
 }
 
 inline boost::intrusive_ptr<IoVector> make_shared_io_vector(size_t size) {
-  auto chunk = static_cast<char*>(malloc(sizeof(IoVector) + size));
+  auto chunk = static_cast<char*>(calloc(sizeof(IoVector) + size, 1));
   if (unlikely(chunk == nullptr)) {
     return boost::intrusive_ptr<IoVector>();
   }

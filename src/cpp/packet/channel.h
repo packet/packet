@@ -64,7 +64,7 @@ class Channel
    * Never use this constructor. It's just public because of std::make_shared.
    */
   explicit Channel(Factory packet_factory, uv_loop_t* loop,
-                   size_t out_buf_size = 2 << 16)
+                   size_t out_buf_size = 1 << 18)
       : std::enable_shared_from_this<Channel>(),
         io_vector(nullptr),
         written(0),
@@ -208,12 +208,13 @@ class Channel
 
     packet_factory.read_packets(
         IoVector(this->io_vector, this->consumed),
-        this->written - this->consumed,
+        std::min(this->written - this->consumed, MAX_READ_SIZE),
         [&](Packet&& packet) { this->call_read_handler(std::move(packet)); },
         &consumed);
 
     this->consumed += consumed;
-    assert(this->consumed <= written);
+    assert(this->consumed <= written &&
+           "We have consumed more data than it's actually written.");
 
     this->write_packets();
   }
@@ -225,7 +226,6 @@ class Channel
     }
 
     using Vectors = std::vector<typename packet::IoVector::SharedIoVectorPtr>;
-
     auto vectors = new Vectors();
     vectors->reserve(buffer_size);
 
@@ -301,13 +301,14 @@ class Channel
     }
 
     assert(consumed <= written);
+
     auto remainder = written - consumed;
     assert(remainder <= new_io_vector->size());
-    packet::internal::IoVector::memmove(new_io_vector.get(), 0,
-        io_vector.get(), consumed, remainder);
+    packet::internal::IoVector::memmove(new_io_vector.get(), 0, io_vector.get(),
+                                        consumed, remainder);
     written = remainder;
     consumed = 0;
-    io_vector = new_io_vector;
+    io_vector = std::move(new_io_vector);
   }
 
   size_t get_new_vector_size() {
@@ -318,18 +319,29 @@ class Channel
     return VECTOR_SIZE + written;
   }
 
-  bool out_of_space(size_t suggested_size) {
+  static constexpr size_t expand_threshhold() {
+    return 3 * VECTOR_SIZE / 4;
+  }
+
+  bool should_expand(size_t suggested_size) {
+    if (consumed < expand_threshhold()) {
+      // Doesn't make sense to expand at this stage.
+      return false;
+    }
+
     return written == io_vector->size();
   }
 
   /** Allocates at least suggested_size from the shared IO vector. */
   void allocate_uv_buf(size_t suggested_size, uv_buf_t* buf) {
-    if (unlikely(io_vector == nullptr || out_of_space(suggested_size))) {
+    if (unlikely(io_vector == nullptr || should_expand(suggested_size))) {
       reinitialize_vector();
     }
 
-    buf->base = io_vector->get_buf(written);
+    assert(written <= io_vector->size());
+
     buf->len = std::min(io_vector->size() - written, VECTOR_SIZE);
+    buf->base = buf->len == 0 ? nullptr : io_vector->get_buf(written);
   }
 
   void start() {
@@ -337,6 +349,11 @@ class Channel
         const uv_buf_t* buf) {
       auto channel = static_cast<Channel*>(stream->data)->self;
       if (unlikely(channel == nullptr)) {
+        return;
+      }
+
+      if (unlikely(nread == UV_ENOBUFS)) {
+        channel->read_packets(0);
         return;
       }
 
@@ -445,10 +462,10 @@ class Channel
 };
 
 template <typename Packet, typename Factory>
-const size_t Channel<Packet, Factory>::VECTOR_SIZE = 8 * 1024 - 8;
+const size_t Channel<Packet, Factory>::VECTOR_SIZE = 1024 * 1024 - 8;
 
 template <typename Packet, typename Factory>
-const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 4096;
+const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 64 * 1024;
 
 template <typename Packet, typename Factory, typename... Args>
 std::shared_ptr<Channel<Packet, Factory>> make_channel(Factory factory,

@@ -51,7 +51,7 @@ class Packet {
   Packet& operator=(const Packet&) = default;
   Packet& operator=(Packet&&) = default;
 
-  // virtual ~Packet() {}
+  virtual ~Packet() {}
 
   virtual size_t size() const {
     return vector.size();
@@ -98,7 +98,7 @@ Packet make_packet(const IoVector& io_vec) {
 
 template <typename Packet>
 Packet make_packet(IoVector&& io_vec) {
-  return Packet(io_vec);
+  return Packet(std::move(io_vec));
 }
 
 template <typename Packet>

@@ -340,9 +340,7 @@ inline IoVector make_io_vector(IoVector::SharedIoVectorPtr&& shared_io_vector) {
 
 inline IoVector make_io_vector(size_t size) {
   assert(size != 0);
-  auto shared_io_vector = packet::internal::make_shared_io_vector(size);
-  std::memset(shared_io_vector->get_buf(0), 0, size);
-  return make_io_vector(std::move(shared_io_vector));
+  return make_io_vector(packet::internal::make_shared_io_vector(size));
 }
 
 }  // namespace packet
