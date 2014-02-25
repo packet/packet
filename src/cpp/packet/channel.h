@@ -39,6 +39,8 @@
 #include <string>
 #include <vector>
 
+#include "boost/intrusive_ptr.hpp"
+
 #include "glog/logging.h"
 
 #include "third_party/libuv/include/uv.h"
@@ -52,55 +54,13 @@
 namespace packet {
 
 template <typename Packet, typename Factory>
-class Channel
-    : public std::enable_shared_from_this<Channel<Packet, Factory>> {
+class Channel {
  public:
   typedef boost::intrusive_ptr<packet::internal::IoVector> SharedIoVector;
-  typedef std::shared_ptr<Channel> ChannelPtr;
-  typedef std::shared_ptr<const Channel> ConstChannelPtr;
+  typedef boost::intrusive_ptr<Channel> ChannelPtr;
+  typedef boost::intrusive_ptr<const Channel> ConstChannelPtr;
   typedef std::uint64_t ChannelId;
-
-  /**
-   * Never use this constructor. It's just public because of std::make_shared.
-   */
-  explicit Channel(Factory packet_factory, uv_loop_t* loop,
-                   size_t out_buf_size = 1 << 18)
-      : std::enable_shared_from_this<Channel>(),
-        io_vector(nullptr),
-        written(0),
-        consumed(0),
-        stream(),
-        close_async(new uv_async_t()),
-        write_async(new uv_async_t()),
-        packet_factory(packet_factory),
-        out_buffer(out_buf_size),
-        read_handler(),
-        close_handler(),
-        self(nullptr),
-        closed(false) {
-    stream.data = this;
-    uv_tcp_init(loop, &stream);
-
-    close_async->data = this;
-    uv_async_init(loop, close_async, [](uv_async_t* async, int status) {
-      auto channel = static_cast<Channel*>(async->data)->self;
-      if (unlikely(channel == nullptr)) {
-        return;
-      }
-
-      channel->do_close();
-    });
-
-    write_async->data = this;
-    uv_async_init(loop, write_async, [](uv_async_t* async, int status) {
-      auto channel = static_cast<Channel*>(async->data)->self;
-      if (unlikely(channel == nullptr)) {
-        return;
-      }
-
-      channel->write_packets();
-    });
-  }
+  typedef size_t RefCount;
 
   ~Channel() {
     auto delete_async = [] (uv_handle_t* handle) {
@@ -172,6 +132,65 @@ class Channel
   static const size_t VECTOR_SIZE;
   static const size_t MAX_READ_SIZE;
 
+  /**
+   * Never use this constructor.
+   */
+  explicit Channel(Factory packet_factory, uv_loop_t* loop,
+                   size_t out_buf_size = 1 << 18)
+      : io_vector(nullptr),
+        written(0),
+        consumed(0),
+        stream(),
+        close_async(new uv_async_t()),
+        write_async(new uv_async_t()),
+        packet_factory(packet_factory),
+        out_buffer(out_buf_size),
+        read_handler(),
+        close_handler(),
+        ref_count(1),
+        closed(false) {
+    stream.data = this;
+    uv_tcp_init(loop, &stream);
+
+    close_async->data = this;
+    uv_async_init(loop, close_async, [](uv_async_t* async, int status) {
+      auto channel = static_cast<Channel*>(async->data);
+      if (unlikely(channel == nullptr)) {
+        return;
+      }
+
+      channel->do_close();
+    });
+
+    write_async->data = this;
+    uv_async_init(loop, write_async, [](uv_async_t* async, int status) {
+      auto channel = static_cast<Channel*>(async->data);
+      if (unlikely(channel == nullptr)) {
+        return;
+      }
+
+      channel->write_packets();
+    });
+  }
+
+  RefCount add_ref(RefCount diff = 1,
+                   std::memory_order order = std::memory_order_seq_cst) {
+    return ref_count.fetch_add(diff, order) + diff;
+  }
+
+  RefCount release(RefCount diff = 1,
+                   std::memory_order order = std::memory_order_seq_cst) {
+    return ref_count.fetch_sub(diff, order) - diff;
+  }
+
+  ChannelPtr self() {
+    return ChannelPtr(this);
+  }
+
+  ConstChannelPtr self() const {
+    return ConstChannelPtr(this);
+  }
+
   bool is_closed() {
     return closed;
   }
@@ -189,7 +208,7 @@ class Channel
 
     uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
       auto channel = static_cast<Channel*>(handle->data);
-      channel->self.reset();
+      intrusive_ptr_release(channel);
     });
   }
 
@@ -347,7 +366,7 @@ class Channel
   void start() {
     auto read_cb = [] (uv_stream_t* stream, ssize_t nread,
         const uv_buf_t* buf) {
-      auto channel = static_cast<Channel*>(stream->data)->self;
+      auto channel = static_cast<Channel*>(stream->data);
       if (unlikely(channel == nullptr)) {
         return;
       }
@@ -368,7 +387,7 @@ class Channel
 
     auto alloc_cb = [] (uv_handle_t* handle, size_t suggested_size,
         uv_buf_t* buf) {
-      auto channel = static_cast<Channel*>(handle->data)->self;
+      auto channel = static_cast<Channel*>(handle->data);
       if (unlikely(channel == nullptr)) {
         return;
       }
@@ -381,7 +400,7 @@ class Channel
 
   void call_error_handler() {
     if (error_handler) {
-      error_handler(self);
+      error_handler(self());
     }
 
     do_close();
@@ -392,7 +411,7 @@ class Channel
       return;
     }
 
-    read_handler(self, std::move(packet));
+    read_handler(self(), std::move(packet));
   }
 
   void call_close_handler() {
@@ -400,7 +419,7 @@ class Channel
       return;
     }
 
-    close_handler(self);
+    close_handler(self());
   }
 
   /** The IO vector allocated for upcoming reads. */
@@ -439,7 +458,7 @@ class Channel
   std::function<void(const ChannelPtr&)> error_handler;
   std::function<void(const ChannelPtr&)> close_handler;
 
-  std::shared_ptr<Channel> self;
+  std::atomic<RefCount> ref_count;
   std::atomic<bool> closed;
 
   template <typename P, typename F>
@@ -449,10 +468,16 @@ class Channel
   friend class ChannelClient;
 
   template <typename P, typename F, typename... A>
-  friend std::shared_ptr<Channel<P, F>> make_channel(F f, A... args);
+  friend typename Channel<P, F>::ChannelPtr make_channel(F f, A... a);
+
+  template <typename P, typename F>
+  friend void intrusive_ptr_add_ref(Channel<P, F>* channel);
+
+  template <typename P, typename F>
+  friend void intrusive_ptr_release(Channel<P, F>* channel);
 
   template <typename C>
-  friend void dispose_channel(const std::shared_ptr<C>& channel);
+  friend void dispose_channel(const boost::intrusive_ptr<C>& channel);
 
   FRIEND_TEST(ChannelTest, Allocation);
   FRIEND_TEST(ChannelTest, MakeChannel);
@@ -468,18 +493,30 @@ template <typename Packet, typename Factory>
 const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 64 * 1024;
 
 template <typename Packet, typename Factory, typename... Args>
-std::shared_ptr<Channel<Packet, Factory>> make_channel(Factory factory,
-                                                       Args... args) {
-  auto channel = std::make_shared<Channel<Packet, Factory>>(
-      factory, std::forward<Args>(args)...);
-  channel->self = channel;
+typename Channel<Packet, Factory>::ChannelPtr make_channel(Factory factory,
+                                                           Args... args) {
+  auto channel = typename Channel<Packet, Factory>::ChannelPtr(
+      new Channel<Packet, Factory>(factory, std::forward<Args>(args)...));
   return channel;
+}
+
+template <typename Packet, typename Factory>
+void intrusive_ptr_add_ref(Channel<Packet, Factory>* channel) {
+  channel->add_ref(1, std::memory_order_relaxed);
+}
+
+template <typename Packet, typename Factory>
+inline void intrusive_ptr_release(Channel<Packet, Factory>* channel) {
+  if (channel->release(1, std::memory_order_release) == 0) {
+    std::atomic_thread_fence(std::memory_order_acquire);
+    delete channel;
+  }
 }
 
 template <typename Packet, typename Factory = PacketFactory<Packet>>
 class ChannelClient final : private packet::internal::UvLoop {
  public:
-  typedef std::shared_ptr<Channel<Packet, Factory>> ChannelPtr;
+  typedef typename Channel<Packet, Factory>::ChannelPtr ChannelPtr;
 
   /**
    * Never call this method.
@@ -508,7 +545,7 @@ class ChannelClient final : private packet::internal::UvLoop {
   }
 
   ~ChannelClient() {
-    channel->self.reset();
+    intrusive_ptr_release(channel.get());
     channel.reset();
 
     delete_loop();
@@ -597,7 +634,7 @@ class ChannelListener final : private packet::internal::UvLoop {
  public:
   static const int DEFUALT_BACKLOG = 1024;
 
-  typedef std::shared_ptr<Channel<Packet, Factory>> ChannelPtr;
+  typedef typename Channel<Packet, Factory>::ChannelPtr ChannelPtr;
 
   /**
    * @param packet_factory The packet factory.

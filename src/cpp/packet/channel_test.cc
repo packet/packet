@@ -31,6 +31,8 @@
 
 #include "third_party/libuv/include/uv.h"
 
+#include "boost/intrusive_ptr.hpp"
+
 #include "gtest/gtest.h"
 
 #include "particle/cpu.h"
@@ -42,6 +44,8 @@
 
 namespace packet {
 
+using boost::intrusive_ptr;
+
 using simple::AnotherSimple;
 using simple::Simple;
 using simple::SimpleParent;
@@ -49,7 +53,6 @@ using simple::YetAnotherSimple;
 using simple::YetYetAnotherSimple;
 
 using std::move;
-using std::shared_ptr;
 using std::unique_ptr;
 
 class DummyPacket : public Packet {
@@ -81,11 +84,11 @@ class DummyPacket : public Packet {
   }
 };
 
-typedef shared_ptr<Channel<DummyPacket>> ChannelPtr;
+typedef intrusive_ptr<Channel<DummyPacket>> ChannelPtr;
 
 template <typename Channel>
-void dispose_channel(const shared_ptr<Channel>& channel) {
-  channel->self.reset();
+void dispose_channel(const intrusive_ptr<Channel>& channel) {
+  intrusive_ptr_release(channel.get());
   delete channel->write_async;
   delete channel->close_async;
   channel->write_async = nullptr;
@@ -479,7 +482,7 @@ void check_yetyet_another_simple(const YetYetAnotherSimple& pkt) {
 
 
 TEST(ChannelIntegration, PingPongGeneratedPackets) {
-  typedef shared_ptr<Channel<SimpleParent>> ChannelPtr;
+  typedef intrusive_ptr<Channel<SimpleParent>> ChannelPtr;
 
   const int CLOSED_ERR_CODE = 1;
   const std::string HOST = "127.0.0.1";
