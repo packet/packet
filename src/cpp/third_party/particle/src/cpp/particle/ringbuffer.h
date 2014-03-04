@@ -68,11 +68,11 @@ class RingBuffer final {
    */
   explicit RingBuffer(size_t capacity)
       // FIXME: Read and document these again!
-      : lower_free_index(0),
+      : buffer_capacity(round_to_power_of_two(capacity)),
+        lower_free_index(0),
         upper_free_index(0),
         lower_full_index(0),
         upper_full_index(0),
-        buffer_capacity(round_to_power_of_two(capacity)),
         buffer(static_cast<T*>(std::malloc(sizeof(T) * buffer_capacity))) {
     assert(buffer_capacity >= 2);
     if (!buffer) {
@@ -242,23 +242,23 @@ class RingBuffer final {
   // Currently being read area is (upper_free_index, lower_full_index].
   // Currently being written area is (upper_full_index, lower_free_index].
 
+  /** The maximum capacity of the buffer. */
+  const size_t __attribute__((aligned(128))) buffer_capacity;
+
   /**
    * The index pointing to the element right before the first free element,
    * i.e., the element that can be reserved for a write.
    */
-  std::atomic<size_t> lower_free_index;
+  std::atomic<size_t> __attribute__((aligned(128))) lower_free_index;
   /** Index pointing to the element right after the last free element. */
-  std::atomic<size_t> upper_free_index;
+  std::atomic<size_t> __attribute__((aligned(128))) upper_free_index;
   /** Index pointing to the element right before the first unread element. */
-  std::atomic<size_t> lower_full_index;
+  std::atomic<size_t> __attribute__((aligned(128))) lower_full_index;
   /** Index of the last unread element. */
-  std::atomic<size_t> upper_full_index;
-
-  /** The maximum capacity of the buffer. */
-  const size_t buffer_capacity;
+  std::atomic<size_t> __attribute__((aligned(128))) upper_full_index;
 
   /** The container that stores buffer elements. */
-  T* const buffer;
+  T* const __attribute__((aligned(128))) buffer;
 };
 
 /**
