@@ -75,10 +75,14 @@ class IoVector final {
   size_t size() const { return buf_size; }
 
   /** Returns the meta-data. */
-  MetaData get_metadata() const { return metadata.load(); }
+  MetaData get_metadata() const {
+    return metadata.load(std::memory_order_acquire);
+  }
 
   /** Sets the meta-data. */
-  void set_metadata(MetaData metadata) { this->metadata.store(metadata); }
+  void set_metadata(MetaData metadata) {
+    this->metadata.store(metadata, std::memory_order_release);
+  }
 
   /** Adds to the reference count. */
   RefCount add_ref(RefCount diff = 1,
@@ -107,8 +111,8 @@ class IoVector final {
     assert(buf != nullptr);
   }
 
-  char* buf;
-  size_t buf_size;
+  char* const buf;
+  const size_t buf_size;
 
   /**
    * Meta-data shared for this buffer. This usually stores an identifier for

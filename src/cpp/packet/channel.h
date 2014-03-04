@@ -111,7 +111,7 @@ class Channel {
       return false;
     }
 
-    if (unlikely(!out_buffer.try_write(packet))) {
+    if (unlikely(!out_buffer.try_write(std::move(packet)))) {
       printf("error %zu\n", out_buffer.guess_size());
       return false;
     }
@@ -122,7 +122,7 @@ class Channel {
   }
 
   void close() {
-    closed = true;
+    closed.store(true, std::memory_order_release);
     uv_async_send(close_async);
   }
 
@@ -136,7 +136,7 @@ class Channel {
    * Never use this constructor.
    */
   explicit Channel(Factory packet_factory, uv_loop_t* loop,
-                   size_t out_buf_size = 1 << 18)
+                   size_t out_buf_size = 1 << 22)
       : io_vector(nullptr),
         written(0),
         consumed(0),
@@ -192,7 +192,7 @@ class Channel {
   }
 
   bool is_closed() {
-    return closed;
+    return closed.load(std::memory_order_acquire);
   }
 
   void do_close() {
@@ -222,23 +222,37 @@ class Channel {
 
     size_t consumed = 0;
 
-    assert(this->consumed <= this->written &&
-           "We have consumed more data than it's actually written.");
+    do {
+      assert(this->consumed <= this->written &&
+             "We have consumed more data than it's actually written.");
 
-    packet_factory.read_packets(
-        IoVector(this->io_vector, this->consumed),
-        std::min(this->written - this->consumed, MAX_READ_SIZE),
-        [&](Packet&& packet) { this->call_read_handler(std::move(packet)); },
-        &consumed);
+      packet_factory.read_packets(
+          IoVector(this->io_vector, this->consumed),
+          std::min(this->written - this->consumed, MAX_READ_SIZE),
+          [&](Packet&& packet) { this->call_read_handler(std::move(packet)); },
+          &consumed);
 
-    this->consumed += consumed;
-    assert(this->consumed <= written &&
-           "We have consumed more data than it's actually written.");
+      this->consumed += consumed;
+      assert(this->consumed <= written &&
+             "We have consumed more data than it's actually written.");
 
-    this->write_packets();
+      if (consumed == 0) {
+        break;
+      }
+
+      consumed = 0;
+    } while (true);
+
+    this->write_packets(IOV_MAX);
   }
 
-  void write_packets() {
+  void write_packets(size_t threshold = 0) {
+    while (out_buffer.guess_size() > threshold) {
+      write_a_batch();
+    }
+  }
+
+  void write_a_batch() {
     size_t buffer_size = std::min((size_t) IOV_MAX, out_buffer.guess_size());
     if (buffer_size == 0) {
       return;
@@ -487,7 +501,7 @@ class Channel {
 };
 
 template <typename Packet, typename Factory>
-const size_t Channel<Packet, Factory>::VECTOR_SIZE = 1024 * 1024 - 8;
+const size_t Channel<Packet, Factory>::VECTOR_SIZE = 256 * 1024 - 8;
 
 template <typename Packet, typename Factory>
 const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 64 * 1024;
