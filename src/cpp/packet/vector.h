@@ -329,6 +329,9 @@ class IoVector final {
   FRIEND_TEST(IoVectorTest, ReadData);
 };
 
+static_assert(std::is_nothrow_move_constructible<IoVector>::value,
+              "IoVector should be noexcept move constructible");
+
 inline IoVector make_io_vector(
     const IoVector::SharedIoVectorPtr& shared_io_vector) {
   return IoVector(shared_io_vector);

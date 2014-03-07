@@ -247,13 +247,14 @@ class Channel {
   }
 
   void write_packets(size_t threshold = 0) {
-    while (out_buffer.guess_size() > threshold) {
-      write_a_batch();
+    size_t batch_size = 0;
+    while ((batch_size = out_buffer.guess_size()) > threshold) {
+      write_a_batch(batch_size);
     }
   }
 
-  void write_a_batch() {
-    size_t buffer_size = std::min((size_t) IOV_MAX, out_buffer.guess_size());
+  void write_a_batch(size_t batch_size) {
+    size_t buffer_size = std::min((size_t) IOV_MAX, batch_size);
     if (buffer_size == 0) {
       return;
     }
