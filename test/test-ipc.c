@@ -375,7 +375,7 @@ TEST_IMPL(listen_with_simultaneous_accepts) {
   r = uv_tcp_init(uv_default_loop(), &server);
   ASSERT(r == 0);
 
-  r = uv_tcp_bind(&server, (const struct sockaddr*) &addr);
+  r = uv_tcp_bind(&server, (const struct sockaddr*) &addr, 0);
   ASSERT(r == 0);
 
   r = uv_tcp_simultaneous_accepts(&server, 1);
@@ -400,7 +400,7 @@ TEST_IMPL(listen_no_simultaneous_accepts) {
   r = uv_tcp_init(uv_default_loop(), &server);
   ASSERT(r == 0);
 
-  r = uv_tcp_bind(&server, (const struct sockaddr*) &addr);
+  r = uv_tcp_bind(&server, (const struct sockaddr*) &addr, 0);
   ASSERT(r == 0);
 
   r = uv_tcp_simultaneous_accepts(&server, 0);
@@ -559,14 +559,14 @@ int ipc_helper(int listen_after_write) {
 
   uv_pipe_open(&channel, 0);
 
-  ASSERT(uv_is_readable((uv_stream_t*) &channel));
-  ASSERT(uv_is_writable((uv_stream_t*) &channel));
-  ASSERT(!uv_is_closing((uv_handle_t*) &channel));
+  ASSERT(1 == uv_is_readable((uv_stream_t*) &channel));
+  ASSERT(1 == uv_is_writable((uv_stream_t*) &channel));
+  ASSERT(0 == uv_is_closing((uv_handle_t*) &channel));
 
   r = uv_tcp_init(uv_default_loop(), &tcp_server);
   ASSERT(r == 0);
 
-  r = uv_tcp_bind(&tcp_server, (const struct sockaddr*) &addr);
+  r = uv_tcp_bind(&tcp_server, (const struct sockaddr*) &addr, 0);
   ASSERT(r == 0);
 
   if (!listen_after_write) {
@@ -609,16 +609,16 @@ int ipc_helper_tcp_connection(void) {
 
   uv_pipe_open(&channel, 0);
 
-  ASSERT(uv_is_readable((uv_stream_t*)&channel));
-  ASSERT(uv_is_writable((uv_stream_t*)&channel));
-  ASSERT(!uv_is_closing((uv_handle_t*)&channel));
+  ASSERT(1 == uv_is_readable((uv_stream_t*) &channel));
+  ASSERT(1 == uv_is_writable((uv_stream_t*) &channel));
+  ASSERT(0 == uv_is_closing((uv_handle_t*) &channel));
 
   r = uv_tcp_init(uv_default_loop(), &tcp_server);
   ASSERT(r == 0);
 
   ASSERT(0 == uv_ip4_addr("0.0.0.0", TEST_PORT, &addr));
 
-  r = uv_tcp_bind(&tcp_server, (const struct sockaddr*) &addr);
+  r = uv_tcp_bind(&tcp_server, (const struct sockaddr*) &addr, 0);
   ASSERT(r == 0);
 
   r = uv_listen((uv_stream_t*)&tcp_server, 12, ipc_on_connection_tcp_conn);

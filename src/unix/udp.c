@@ -40,8 +40,11 @@ static int uv__udp_maybe_deferred_bind(uv_udp_t* handle, int domain);
 void uv__udp_close(uv_udp_t* handle) {
   uv__io_close(handle->loop, &handle->io_watcher);
   uv__handle_stop(handle);
-  close(handle->io_watcher.fd);
-  handle->io_watcher.fd = -1;
+
+  if (handle->io_watcher.fd != -1) {
+    uv__close(handle->io_watcher.fd);
+    handle->io_watcher.fd = -1;
+  }
 }
 
 
@@ -337,7 +340,7 @@ int uv__udp_bind(uv_udp_t* handle,
   return 0;
 
 out:
-  close(handle->io_watcher.fd);
+  uv__close(handle->io_watcher.fd);
   handle->io_watcher.fd = -1;
   return err;
 }
@@ -534,6 +537,31 @@ int uv_udp_set_multicast_ttl(uv_udp_t* handle, int ttl) {
 
 int uv_udp_set_multicast_loop(uv_udp_t* handle, int on) {
   return uv__setsockopt_maybe_char(handle, IP_MULTICAST_LOOP, on);
+}
+
+int uv_udp_set_multicast_interface(uv_udp_t* handle, const char* interface_addr) {
+  struct in_addr addr;
+  int err;
+
+  memset(&addr, 0, sizeof addr);
+
+  if (interface_addr) {
+    err = uv_inet_pton(AF_INET, interface_addr, &addr.s_addr);
+    if (err)
+      return err;
+  } else {
+    addr.s_addr = htonl(INADDR_ANY);
+  }
+
+  if (setsockopt(handle->io_watcher.fd,
+                 IPPROTO_IP,
+                 IP_MULTICAST_IF,
+                 (void*) &addr,
+                 sizeof addr) == -1) {
+    return -errno;
+  }
+
+  return 0;
 }
 
 

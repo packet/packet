@@ -202,12 +202,16 @@ int uv_write2(uv_write_t* req,
 }
 
 
+int uv_try_write(uv_stream_t* stream,
+                 const uv_buf_t bufs[],
+                 unsigned int nbufs) {
+  /* NOTE: Won't work with overlapped writes */
+  return UV_ENOSYS;
+}
+
+
 int uv_shutdown(uv_shutdown_t* req, uv_stream_t* handle, uv_shutdown_cb cb) {
   uv_loop_t* loop = handle->loop;
-
-  if (!(handle->flags & UV_HANDLE_WRITABLE)) {
-    return UV_EPIPE;
-  }
 
   if (!(handle->flags & UV_HANDLE_WRITABLE)) {
     return UV_EPIPE;
@@ -240,6 +244,9 @@ int uv_is_writable(const uv_stream_t* handle) {
 
 
 int uv_stream_set_blocking(uv_stream_t* handle, int blocking) {
+  if (handle->type != UV_NAMED_PIPE)
+    return UV_EINVAL;
+
   if (blocking != 0)
     handle->flags |= UV_HANDLE_BLOCKING_WRITES;
   else

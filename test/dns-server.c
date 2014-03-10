@@ -159,12 +159,16 @@ static void process_req(uv_stream_t* handle,
         /* process len and id */
         if (readbuf_remaining < hdrbuf_remaining) {
           /* too little to get request header. save for next buffer */
-          memcpy(&hdrbuf[DNSREC_LEN - hdrbuf_remaining], dnsreq, readbuf_remaining);
+          memcpy(&hdrbuf[DNSREC_LEN - hdrbuf_remaining],
+                 dnsreq,
+                 readbuf_remaining);
           hdrbuf_remaining = DNSREC_LEN - readbuf_remaining;
           break;
         } else {
           /* save header */
-          memcpy(&hdrbuf[DNSREC_LEN - hdrbuf_remaining], dnsreq, hdrbuf_remaining);
+          memcpy(&hdrbuf[DNSREC_LEN - hdrbuf_remaining],
+                 dnsreq,
+                 hdrbuf_remaining);
           dnsreq += hdrbuf_remaining;
           readbuf_remaining -= hdrbuf_remaining;
           hdrbuf_remaining = 0;
@@ -192,7 +196,9 @@ static void process_req(uv_stream_t* handle,
       }
     }
 
-    /* if we had to use bytes from prev buffer, start processing the current one */
+    /* If we had to use bytes from prev buffer, start processing the current
+     * one.
+     */
     if (usingprev == 1) {
       /* free previous buffer */
       free(dns->state.prevbuf_ptr);
@@ -305,7 +311,7 @@ static int dns_start(int port) {
     return 1;
   }
 
-  r = uv_tcp_bind(&server, (const struct sockaddr*) &addr);
+  r = uv_tcp_bind(&server, (const struct sockaddr*) &addr, 0);
   if (r) {
     /* TODO: Error codes */
     fprintf(stderr, "Bind error\n");
