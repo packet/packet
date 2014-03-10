@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <stdlib.h> /* abort */
 #include <string.h> /* strrchr */
+#include <fcntl.h>  /* O_CLOEXEC, may be */
 
 #if defined(__STRICT_ANSI__)
 # define inline __inline
@@ -111,6 +112,14 @@
 # define UV__POLLHUP  8
 #endif
 
+#if !defined(O_CLOEXEC) && defined(__FreeBSD__)
+/*
+ * It may be that we are just missing `__POSIX_VISIBLE >= 200809`.
+ * Try using fixed value const and give up, if it doesn't work
+ */
+# define O_CLOEXEC 0x00100000
+#endif
+
 /* handle flags */
 enum {
   UV_CLOSING              = 0x01,   /* uv_close() called but not finished. */
@@ -128,11 +137,18 @@ enum {
   UV_TCP_SINGLE_ACCEPT    = 0x1000  /* Only accept() when idle. */
 };
 
+typedef enum {
+  UV_CLOCK_PRECISE = 0,  /* Use the highest resolution clock available. */
+  UV_CLOCK_FAST = 1      /* Use the fastest clock with <= 1ms granularity. */
+} uv_clocktype_t;
+
 /* core */
 int uv__nonblock(int fd, int set);
+int uv__close(int fd);
 int uv__cloexec(int fd, int set);
 int uv__socket(int domain, int type, int protocol);
 int uv__dup(int fd);
+ssize_t uv__recvmsg(int fd, struct msghdr *msg, int flags);
 void uv__make_close_pending(uv_handle_t* handle);
 
 void uv__io_init(uv__io_t* w, uv__io_cb cb, int fd);
@@ -190,10 +206,11 @@ void uv__work_submit(uv_loop_t* loop,
 void uv__work_done(uv_async_t* handle, int status);
 
 /* platform specific */
-uint64_t uv__hrtime(void);
+uint64_t uv__hrtime(uv_clocktype_t type);
 int uv__kqueue_init(uv_loop_t* loop);
 int uv__platform_loop_init(uv_loop_t* loop, int default_loop);
 void uv__platform_loop_delete(uv_loop_t* loop);
+void uv__platform_invalidate_fd(uv_loop_t* loop, int fd);
 
 /* various */
 void uv__async_close(uv_async_t* handle);
@@ -262,7 +279,9 @@ UV_UNUSED(static void uv__req_init(uv_loop_t* loop,
   uv__req_init((loop), (uv_req_t*)(req), (type))
 
 UV_UNUSED(static void uv__update_time(uv_loop_t* loop)) {
-  loop->time = uv__hrtime() / 1000000;
+  /* Use a fast time source if available.  We only need millisecond precision.
+   */
+  loop->time = uv__hrtime(UV_CLOCK_FAST) / 1000000;
 }
 
 UV_UNUSED(static char* uv__basename_r(const char* path)) {

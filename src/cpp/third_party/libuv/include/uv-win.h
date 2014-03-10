@@ -533,7 +533,6 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
     UV_REQ_FIELDS                                                             \
   } exit_req;                                                                 \
   BYTE* child_stdio_buffer;                                                   \
-  int spawn_error;                                                            \
   int exit_signal;                                                            \
   HANDLE wait_handle;                                                         \
   HANDLE process_handle;                                                      \
@@ -553,9 +552,10 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
       WCHAR* new_pathw;                                                       \
       int file_flags;                                                         \
       int fd_out;                                                             \
-      void* buf;                                                              \
-      size_t length;                                                          \
+      unsigned int nbufs;                                                     \
+      uv_buf_t* bufs;                                                         \
       int64_t offset;                                                         \
+      uv_buf_t bufsml[4];                                                     \
     };                                                                        \
     struct {                                                                  \
       double atime;                                                           \

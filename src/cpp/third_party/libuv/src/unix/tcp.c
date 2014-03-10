@@ -48,7 +48,7 @@ static int maybe_new_socket(uv_tcp_t* handle, int domain, int flags) {
 
   err = uv__stream_open((uv_stream_t*) handle, sockfd, flags);
   if (err) {
-    close(sockfd);
+    uv__close(sockfd);
     return err;
   }
 
@@ -58,7 +58,8 @@ static int maybe_new_socket(uv_tcp_t* handle, int domain, int flags) {
 
 int uv__tcp_bind(uv_tcp_t* tcp,
                  const struct sockaddr* addr,
-                 unsigned int addrlen) {
+                 unsigned int addrlen,
+                 unsigned int flags) {
   int err;
   int on;
 
@@ -71,6 +72,19 @@ int uv__tcp_bind(uv_tcp_t* tcp,
   on = 1;
   if (setsockopt(tcp->io_watcher.fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)))
     return -errno;
+
+#ifdef IPV6_V6ONLY
+  if (addr->sa_family == AF_INET6) {
+    on = (flags & UV_TCP_IPV6ONLY) != 0;
+    if (setsockopt(tcp->io_watcher.fd,
+                   IPPROTO_IPV6,
+                   IPV6_V6ONLY,
+                   &on,
+                   sizeof on) == -1) {
+      return -errno;
+    }
+  }
+#endif
 
   errno = 0;
   if (bind(tcp->io_watcher.fd, addr, addrlen) && errno != EADDRINUSE)
@@ -218,7 +232,9 @@ int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb) {
 
 
 int uv__tcp_nodelay(int fd, int on) {
-  return setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on));
+  if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)))
+    return -errno;
+  return 0;
 }
 
 

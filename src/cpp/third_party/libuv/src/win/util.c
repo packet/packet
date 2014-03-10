@@ -36,6 +36,7 @@
 #include <iphlpapi.h>
 #include <psapi.h>
 #include <tlhelp32.h>
+#include <windows.h>
 
 
 /*
@@ -59,20 +60,24 @@
 static char *process_title;
 static CRITICAL_SECTION process_title_lock;
 
-/* The tick frequency of the high-resolution clock. */
-static uint64_t hrtime_frequency_ = 0;
+/* Frequency (ticks per nanosecond) of the high-resolution clock. */
+static double hrtime_frequency_ = 0;
 
 
 /*
  * One-time intialization code for functionality defined in util.c.
  */
 void uv__util_init() {
+  LARGE_INTEGER perf_frequency;
+
   /* Initialize process title access mutex. */
   InitializeCriticalSection(&process_title_lock);
 
   /* Retrieve high-resolution timer frequency. */
-  if (!QueryPerformanceFrequency((LARGE_INTEGER*) &hrtime_frequency_))
-    hrtime_frequency_ = 0;
+  if (QueryPerformanceFrequency(&perf_frequency))
+    hrtime_frequency_ = (double) perf_frequency.QuadPart / (double) NANOSEC;
+  else
+    hrtime_frequency_= 0;
 }
 
 
@@ -447,7 +452,7 @@ uint64_t uv_hrtime(void) {
   uv__once_init();
 
   /* If the performance frequency is zero, there's no support. */
-  if (!hrtime_frequency_) {
+  if (hrtime_frequency_ == 0) {
     /* uv__set_sys_error(loop, ERROR_NOT_SUPPORTED); */
     return 0;
   }
@@ -457,12 +462,11 @@ uint64_t uv_hrtime(void) {
     return 0;
   }
 
-  /* Because we have no guarantee about the order of magnitude of the */
-  /* performance counter frequency, and there may not be much headroom to */
-  /* multiply by NANOSEC without overflowing, we use 128-bit math instead. */
-  return ((uint64_t) counter.LowPart * NANOSEC / hrtime_frequency_) +
-         (((uint64_t) counter.HighPart * NANOSEC / hrtime_frequency_)
-         << 32);
+  /* Because we have no guarantee about the order of magnitude of the
+   * performance counter frequency, integer math could cause this computation
+   * to overflow. Therefore we resort to floating point math.
+   */
+  return (uint64_t) ((double) counter.QuadPart / hrtime_frequency_);
 }
 
 
@@ -984,4 +988,40 @@ int uv_interface_addresses(uv_interface_address_t** addresses_ptr,
 void uv_free_interface_addresses(uv_interface_address_t* addresses,
     int count) {
   free(addresses);
+}
+
+
+int uv_getrusage(uv_rusage_t *uv_rusage) {
+  FILETIME createTime, exitTime, kernelTime, userTime;
+  SYSTEMTIME kernelSystemTime, userSystemTime;
+  int ret;
+
+  ret = GetProcessTimes(GetCurrentProcess(), &createTime, &exitTime, &kernelTime, &userTime);
+  if (ret == 0) {
+    return uv_translate_sys_error(GetLastError());
+  }
+
+  ret = FileTimeToSystemTime(&kernelTime, &kernelSystemTime);
+  if (ret == 0) {
+    return uv_translate_sys_error(GetLastError());
+  }
+
+  ret = FileTimeToSystemTime(&userTime, &userSystemTime);
+  if (ret == 0) {
+    return uv_translate_sys_error(GetLastError());
+  }
+
+  memset(uv_rusage, 0, sizeof(*uv_rusage));
+
+  uv_rusage->ru_utime.tv_sec = userSystemTime.wHour * 3600 +
+                               userSystemTime.wMinute * 60 +
+                               userSystemTime.wSecond;
+  uv_rusage->ru_utime.tv_usec = userSystemTime.wMilliseconds * 1000;
+
+  uv_rusage->ru_stime.tv_sec = kernelSystemTime.wHour * 3600 +
+                               kernelSystemTime.wMinute * 60 +
+                               kernelSystemTime.wSecond;
+  uv_rusage->ru_stime.tv_usec = kernelSystemTime.wMilliseconds * 1000;
+
+  return 0;
 }
