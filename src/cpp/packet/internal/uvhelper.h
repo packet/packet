@@ -46,12 +46,18 @@ namespace internal {
  */
 class UvLoop {
  public:
-  UvLoop() : loop(uv_loop_new()) {}
+  UvLoop() : loop() {
+    uv_loop_init(&loop);
+  }
+
+  ~UvLoop() {
+    delete_loop();
+  }
 
  protected:
   /** Starts the loop. */
   int start_loop(uv_run_mode mode = UV_RUN_DEFAULT) noexcept {
-    return uv_run(loop, mode);
+    return uv_run(&loop, mode);
   }
 
   /**
@@ -59,7 +65,7 @@ class UvLoop {
    * Note: Should be only called inside callbacks for thread saftey reasons.
    */
   void stop_loop() noexcept {
-    return uv_stop(loop);
+    return uv_stop(&loop);
   }
 
   /**
@@ -72,7 +78,7 @@ class UvLoop {
     disable_all_streams();
     start_loop(UV_RUN_NOWAIT);
 
-    uv_loop_delete(loop);
+    uv_loop_close(&loop);
   }
 
   void disable_all_streams() {
@@ -84,12 +90,16 @@ class UvLoop {
       if (handle->type == UV_TCP) {
         uv_read_stop(reinterpret_cast<uv_stream_t*>(handle));
       }
+
+      if (!uv_is_closing(handle)) {
+        uv_close(handle, nullptr);
+      }
     };
 
-    uv_walk(loop, walk_cb, nullptr);
+    uv_walk(&loop, walk_cb, nullptr);
   }
 
-  uv_loop_t* loop;
+  uv_loop_t loop;
 };
 
 }  // namespace internal

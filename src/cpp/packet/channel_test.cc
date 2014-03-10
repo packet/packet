@@ -87,7 +87,7 @@ class DummyPacket : public Packet {
 typedef intrusive_ptr<Channel<DummyPacket>> ChannelPtr;
 
 template <typename Channel>
-void dispose_channel(const intrusive_ptr<Channel>& channel) {
+void delete_chan(const intrusive_ptr<Channel>& channel) {
   intrusive_ptr_release(channel.get());
   delete channel->write_async;
   delete channel->close_async;
@@ -95,18 +95,30 @@ void dispose_channel(const intrusive_ptr<Channel>& channel) {
   channel->close_async = nullptr;
 }
 
+void delete_loop(uv_loop_t* loop) {
+  uv_loop_close(loop);
+  delete loop;
+}
+
+uv_loop_t* new_loop() {
+  auto loop = new uv_loop_t;
+  uv_loop_init(loop);
+  return loop;
+}
+
 TEST(ChannelTest, MakeChannel) {
   auto packet_factory = make_packet_factory<DummyPacket>();
-  auto loop = uv_loop_new();
+  auto loop = new_loop();
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
-  uv_loop_delete(loop);
-  dispose_channel(dummy_channel);
+
+  delete_chan(dummy_channel);
+  delete_loop(loop);
 }
 
 TEST(ChannelTest, Allocation) {
   auto packet_factory = make_packet_factory<DummyPacket>();
-  auto loop = uv_loop_new();
+  auto loop = new_loop();
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
 
@@ -163,14 +175,13 @@ TEST(ChannelTest, Allocation) {
   EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE,
             dummy_channel->io_vector->size());
 
-  uv_loop_delete(loop);
-
-  dispose_channel(dummy_channel);
+  delete_chan(dummy_channel);
+  delete_loop(loop);
 }
 
 TEST(ChannelTest, ReadPackets) {
   auto packet_factory = make_packet_factory<DummyPacket>();
-  auto loop = uv_loop_new();
+  auto loop = new_loop();
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
 
@@ -200,14 +211,13 @@ TEST(ChannelTest, ReadPackets) {
   EXPECT_EQ(packet_count, read_packet_count);
   EXPECT_EQ(buffer_size, read_packet_size);
 
-  uv_loop_delete(loop);
-
-  dispose_channel(dummy_channel);
+  delete_chan(dummy_channel);
+  delete_loop(loop);
 }
 
 TEST(ChannelTest, WritePackets) {
   auto packet_factory = make_packet_factory<DummyPacket>();
-  auto loop = uv_loop_new();
+  auto loop = new_loop();
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
 
@@ -217,18 +227,20 @@ TEST(ChannelTest, WritePackets) {
   EXPECT_TRUE(dummy_channel->write(move(w_p)));
   EXPECT_EQ(size_t(1), dummy_channel->out_buffer.guess_size());
 
-  DummyPacket r_p(2);
-  EXPECT_TRUE(dummy_channel->out_buffer.try_read(&r_p));
+  Channel<DummyPacket>::WriteReq req;
+  EXPECT_TRUE(dummy_channel->out_buffer.try_read(&req));
+  EXPECT_TRUE(!!req.vec);
+
+  DummyPacket r_p(make_io_vector(std::move(req.vec)));
   EXPECT_EQ(ID, r_p.get_id());
 
-  uv_loop_delete(loop);
-
-  dispose_channel(dummy_channel);
+  delete_chan(dummy_channel);
+  delete_loop(loop);
 }
 
 TEST(ChannelTest, WritePacketsPerCpu) {
   auto packet_factory = make_packet_factory<DummyPacket>();
-  auto loop = uv_loop_new();
+  auto loop = new_loop();
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
 
@@ -250,17 +262,19 @@ TEST(ChannelTest, WritePacketsPerCpu) {
   EXPECT_EQ(cpu_count, dummy_channel->out_buffer.guess_size());
 
   for (size_t i = 0; i < cpu_count; i++) {
-    DummyPacket r_p(2);
     particle::CpuId cpu_id = 0;
-    EXPECT_TRUE(dummy_channel->out_buffer.try_read(&r_p, &cpu_id));
+    Channel<DummyPacket>::WriteReq req;
+    EXPECT_TRUE(dummy_channel->out_buffer.try_read(&req, &cpu_id));
+    EXPECT_TRUE(!!req.vec);
+
+    DummyPacket r_p(make_io_vector(std::move(req.vec)));
     EXPECT_EQ(ID, r_p.get_id());
   }
 
   EXPECT_EQ(size_t(0), dummy_channel->out_buffer.guess_size());
 
-  uv_loop_delete(loop);
-
-  dispose_channel(dummy_channel);
+  delete_chan(dummy_channel);
+  delete_loop(loop);
 }
 
 TEST(ChannelListener, MakeListener) {

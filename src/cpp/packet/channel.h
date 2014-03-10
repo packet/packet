@@ -111,12 +111,19 @@ class Channel {
       return false;
     }
 
-    if (unlikely(!out_buffer.try_write(std::move(packet)))) {
+    auto size = packet.size();
+    auto io_vec = packet.get_io_vector();
+    WriteReq req{{io_vec->get_buf(), size},  // NOLINT
+                 std::move(io_vec->shared_io_vector)};
+    if (unlikely(!out_buffer.try_write(std::move(req)))) {
       printf("error %zu\n", out_buffer.guess_size());
       return false;
     }
 
-    uv_async_send(write_async);
+    if (!write_async_sent.load(std::memory_order_acquire)) {
+      write_async_sent.store(true, std::memory_order_release);
+      uv_async_send(write_async);
+    }
 
     return true;
   }
@@ -131,6 +138,11 @@ class Channel {
  private:
   static const size_t VECTOR_SIZE;
   static const size_t MAX_READ_SIZE;
+
+  struct WriteReq {
+    uv_buf_t buf;
+    SharedIoVector vec;
+  };
 
   /**
    * Never use this constructor.
@@ -148,7 +160,8 @@ class Channel {
         read_handler(),
         close_handler(),
         ref_count(1),
-        closed(false) {
+        closed(false),
+        write_async_sent(false) {
     stream.data = this;
     uv_tcp_init(loop, &stream);
 
@@ -169,6 +182,7 @@ class Channel {
         return;
       }
 
+      channel->write_async_sent.store(false, std::memory_order_release);
       channel->write_packets();
     });
   }
@@ -220,9 +234,8 @@ class Channel {
     this->written += size;
     assert(io_vector->size() >= written);
 
-    size_t consumed = 0;
-
     do {
+      size_t consumed = 0;
       assert(this->consumed <= this->written &&
              "We have consumed more data than it's actually written.");
 
@@ -240,51 +253,56 @@ class Channel {
         break;
       }
 
-      consumed = 0;
+      this->write_packets(IOV_MAX);
     } while (true);
-
-    this->write_packets(IOV_MAX);
   }
 
   void write_packets(size_t threshold = 0) {
-    size_t batch_size = 0;
-    while ((batch_size = out_buffer.guess_size()) > threshold) {
-      write_a_batch(batch_size);
+    auto size = out_buffer.guess_size();
+    while (size > threshold) {
+      auto written = write_a_batch(size);
+      if (!written) {
+        return;
+      }
+
+      if (unlikely(written > size)) {
+        return;
+      }
+
+      size -= written;
     }
   }
 
-  void write_a_batch(size_t batch_size) {
-    size_t buffer_size = std::min((size_t) IOV_MAX, batch_size);
-    if (buffer_size == 0) {
-      return;
+  size_t write_a_batch(size_t batch_size) {
+    if (unlikely(!batch_size)) {
+      return 0;
     }
 
-    using Vectors = std::vector<typename packet::IoVector::SharedIoVectorPtr>;
+    size_t buffer_size = std::min((size_t) IOV_MAX, batch_size);
+
+    using Vectors = std::vector<SharedIoVector>;
     auto vectors = new Vectors();
     vectors->reserve(buffer_size);
 
     uv_buf_t bufs[IOV_MAX];
 
-    Packet packet(make_io_vector(nullptr));
+    WriteReq req;
     particle::CpuId last_cpu_id = 0;
 
     size_t consumed = 0;
-    for (size_t j = 0; j < buffer_size; ++j) {
-      if (!out_buffer.try_read(&packet, &last_cpu_id)) {
-        sched_yield();
+    while (buffer_size--) {
+      if (!out_buffer.try_read(&req, &last_cpu_id)) {
         continue;
       }
 
-      bufs[consumed].base = packet.get_io_vector()->get_buf();
-      bufs[consumed].len = packet.size();
-
-      vectors->push_back(std::move(packet.get_io_vector()->shared_io_vector));
+      bufs[consumed] = std::move(req.buf);
+      vectors->push_back(std::move(req.vec));
       ++consumed;
     }
 
     if (consumed == 0) {
       delete vectors;
-      return;
+      return 0;
     }
 
     auto channel_after_write_cb = [](uv_write_t* req, int status) {
@@ -305,13 +323,16 @@ class Channel {
     uv_write_t* write_req = new uv_write_t();
     write_req->data = static_cast<void*>(vectors);
 
-    if (is_closed() ||
+    if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)) ||
         uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,
                  consumed, channel_after_write_cb)) {
       LOG(ERROR) << "Error in write.\n";
       delete vectors;
       delete write_req;
+      return 0;
     }
+
+    return consumed;
   }
 
   /**
@@ -464,7 +485,7 @@ class Channel {
   Factory packet_factory;
 
   /** The buffer used for outgoing packets. */
-  particle::PerCpuRingBuffer<Packet> out_buffer;
+  particle::PerCpuRingBuffer<WriteReq> out_buffer;
 
   // TODO(soheil): Write a light weight functor. We don't really need such a
   //               structure. Then explain why we didn't use std::fucntion,
@@ -475,6 +496,7 @@ class Channel {
 
   std::atomic<RefCount> ref_count;
   std::atomic<bool> closed;
+  std::atomic<bool> write_async_sent;
 
   template <typename P, typename F>
   friend class ChannelListener;
@@ -492,7 +514,7 @@ class Channel {
   friend void intrusive_ptr_release(Channel<P, F>* channel);
 
   template <typename C>
-  friend void dispose_channel(const boost::intrusive_ptr<C>& channel);
+  friend void delete_chan(const boost::intrusive_ptr<C>& channel);
 
   FRIEND_TEST(ChannelTest, Allocation);
   FRIEND_TEST(ChannelTest, MakeChannel);
@@ -502,7 +524,7 @@ class Channel {
 };
 
 template <typename Packet, typename Factory>
-const size_t Channel<Packet, Factory>::VECTOR_SIZE = 256 * 1024 - 8;
+const size_t Channel<Packet, Factory>::VECTOR_SIZE = 128 * 1024 - 8;
 
 template <typename Packet, typename Factory>
 const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 64 * 1024;
@@ -545,7 +567,7 @@ class ChannelClient final : private packet::internal::UvLoop {
         connection_handler(),
         cleanup_gaurd([this] { this->stop(); }) {
     stop_async.data = this;
-    uv_async_init(loop, &stop_async, [](uv_async_t* async, int status) {
+    uv_async_init(&loop, &stop_async, [](uv_async_t* async, int status) {
       if (status) {
         // FIXME(soheil): Log this.
         return;
@@ -562,8 +584,6 @@ class ChannelClient final : private packet::internal::UvLoop {
   ~ChannelClient() {
     intrusive_ptr_release(channel.get());
     channel.reset();
-
-    delete_loop();
   }
 
   /**
@@ -581,7 +601,7 @@ class ChannelClient final : private packet::internal::UvLoop {
     uv_connect_t connect_req;
     connect_req.data = this;
 
-    channel = make_channel<Packet>(packet_factory, loop);
+    channel = make_channel<Packet>(packet_factory, &loop);
 
     sockaddr* saddr = reinterpret_cast<sockaddr*>(&addr);
     int err = uv_tcp_connect(&connect_req, &channel->stream, saddr,
@@ -663,11 +683,11 @@ class ChannelListener final : private packet::internal::UvLoop {
         error_handler(),
         packet_factory(packet_factory),
         cleanup_gaurd([this] { this->stop(); }) {
-    uv_tcp_init(loop, &server);
+    uv_tcp_init(&loop, &server);
     server.data = this;
 
     stop_async.data = this;
-    uv_async_init(loop, &stop_async, [](uv_async_t* async, int status) {
+    uv_async_init(&loop, &stop_async, [](uv_async_t* async, int status) {
       if (status) {
         // FIXME(soheil): Log this.
         return;
@@ -680,7 +700,6 @@ class ChannelListener final : private packet::internal::UvLoop {
 
   ~ChannelListener() {
     uv_close(reinterpret_cast<uv_handle_t*>(&stop_async), nullptr);
-    delete_loop();
   }
 
   /**
@@ -715,9 +734,9 @@ class ChannelListener final : private packet::internal::UvLoop {
     // Linux.
     particle::ignore_signal(SIGPIPE);
 
-    uv_tcp_bind(&server, reinterpret_cast<sockaddr*>(&addr));
+    uv_tcp_bind(&server, reinterpret_cast<sockaddr*>(&addr), 0);
     auto err = uv_listen(reinterpret_cast<uv_stream_t*>(&server), backlog,
-        [] (uv_stream_t* server, int status) {
+                         [](uv_stream_t* server, int status) {
           auto self = static_cast<ChannelListener*>(server->data);
 
           if (status) {
@@ -725,7 +744,8 @@ class ChannelListener final : private packet::internal::UvLoop {
             return;
           }
 
-          auto channel = make_channel<Packet>(self->packet_factory, self->loop);
+          auto channel =
+              make_channel<Packet>(self->packet_factory, &self->loop);
 
           auto server_stream = reinterpret_cast<uv_stream_t*>(&self->server);
           auto client_stream = reinterpret_cast<uv_stream_t*>(&channel->stream);
@@ -739,7 +759,7 @@ class ChannelListener final : private packet::internal::UvLoop {
           self->call_accept_handler(channel);
 
           channel->start();
-        });
+    });
 
     if (err) {
       call_error_handler();
