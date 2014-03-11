@@ -227,6 +227,11 @@
 #define FOLLY_HAVE_UNISTD_H 1
 #endif
 
+/* Define to 1 if the linker supports weak symbols. */
+#ifndef FOLLY_HAVE_WEAK_SYMBOLS
+#define FOLLY_HAVE_WEAK_SYMBOLS 1
+#endif
+
 /* Define to 1 if the system has the type `_Bool'. */
 /* #undef HAVE__BOOL */
 
