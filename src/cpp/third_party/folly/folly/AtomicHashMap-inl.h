@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,7 +155,7 @@ typename AtomicHashMap<KeyT, ValueT, HashFcn, EqualFcn, Allocator>::iterator
 AtomicHashMap<KeyT, ValueT, HashFcn, EqualFcn, Allocator>::
 find(KeyT k) {
   SimpleRetT ret = findInternal(k);
-  if (ret.i >= numMapsAllocated_.load(std::memory_order_acquire)) {
+  if (!ret.success) {
     return end();
   }
   SubMap* subMap = subMaps_[ret.i].load(std::memory_order_relaxed);

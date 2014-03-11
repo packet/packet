@@ -114,7 +114,7 @@ class RingBuffer final {
    */
   bool try_write(T&& record) {
     size_t current_free_index =
-        lower_free_index.load(std::memory_order_acquire);
+        lower_free_index.load(std::memory_order_relaxed);
 
     size_t next_free_index = 0;
 
@@ -136,7 +136,7 @@ class RingBuffer final {
       }
     } while (!lower_free_index.compare_exchange_weak(
                   current_free_index, next_free_index,
-                  std::memory_order_release, std::memory_order_acquire));
+                  std::memory_order_release, std::memory_order_relaxed));
 
     new (&buffer[masked(next_free_index)]) T(std::move(record));  // NOLINT
 
@@ -146,7 +146,7 @@ class RingBuffer final {
       current_free_index_copy = current_free_index;
     } while (!upper_full_index.compare_exchange_weak(
                   current_free_index_copy, next_free_index,
-                  std::memory_order_release, std::memory_order_acquire));
+                  std::memory_order_release, std::memory_order_relaxed));
 
     return true;
   }
@@ -157,7 +157,8 @@ class RingBuffer final {
    * @return Whether read is successful. Note: It may spuriously fail.
    */
   bool try_read(T* record = nullptr) {
-    size_t current_full_index = lower_full_index.load();
+    size_t current_full_index =
+        lower_full_index.load(std::memory_order_relaxed);
     size_t next_full_index = 0;
 
     do {
@@ -177,7 +178,7 @@ class RingBuffer final {
       next_full_index = current_full_index + 1;
     } while (!lower_full_index.compare_exchange_weak(
                   current_full_index, next_full_index,
-                  std::memory_order_release, std::memory_order_acquire));
+                  std::memory_order_release, std::memory_order_relaxed));
 
     if (record != nullptr) {
       *record = std::move(buffer[masked(next_full_index)]);
@@ -191,7 +192,7 @@ class RingBuffer final {
       current_full_index_copy = current_full_index;
     } while (!upper_free_index.compare_exchange_weak(
                   current_full_index_copy, next_full_index,
-                  std::memory_order_release, std::memory_order_acquire));
+                  std::memory_order_release, std::memory_order_relaxed));
 
     return true;
   }

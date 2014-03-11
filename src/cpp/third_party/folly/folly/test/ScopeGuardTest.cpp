@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,11 +127,7 @@ TEST(ScopeGuard, GuardException) {
       throw std::runtime_error("destructors should never throw!");
     });
   },
-#if FOLLY_USE_LIBCPP
-  "terminate called throwing an exception"
-#else
-  "destructors should never throw"
-#endif
+  "destructors should never throw!"
   );
 }
 
@@ -256,6 +252,43 @@ TEST(ScopeGuard, TEST_SCOPE_FAILURE2) {
     throw std::runtime_error("test");
   } catch (...) {
   }
+}
+
+void testScopeFailAndScopeSuccess(ErrorBehavior error, bool expectFail) {
+  bool scopeFailExecuted = false;
+  bool scopeSuccessExecuted = false;
+
+  try {
+    SCOPE_FAIL { scopeFailExecuted = true; };
+    SCOPE_SUCCESS { scopeSuccessExecuted = true; };
+
+    try {
+      if (error == ErrorBehavior::HANDLED_ERROR) {
+        throw std::runtime_error("throwing an expected error");
+      } else if (error == ErrorBehavior::UNHANDLED_ERROR) {
+        throw "never throw raw strings";
+      }
+    } catch (const std::runtime_error&) {
+    }
+  } catch (...) {
+    // Outer catch to swallow the error for the UNHANDLED_ERROR behavior
+  }
+
+  EXPECT_EQ(expectFail, scopeFailExecuted);
+  EXPECT_EQ(!expectFail, scopeSuccessExecuted);
+}
+
+TEST(ScopeGuard, TEST_SCOPE_FAIL_AND_SCOPE_SUCCESS) {
+  testScopeFailAndScopeSuccess(ErrorBehavior::SUCCESS, false);
+  testScopeFailAndScopeSuccess(ErrorBehavior::HANDLED_ERROR, false);
+  testScopeFailAndScopeSuccess(ErrorBehavior::UNHANDLED_ERROR, true);
+}
+
+TEST(ScopeGuard, TEST_SCOPE_SUCCESS_THROW) {
+  auto lambda = []() {
+    SCOPE_SUCCESS { throw std::runtime_error("ehm"); };
+  };
+  EXPECT_THROW(lambda(), std::runtime_error);
 }
 
 int main(int argc, char** argv) {

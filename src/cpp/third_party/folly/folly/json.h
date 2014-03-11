@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,9 @@ namespace json {
       , encode_non_ascii(false)
       , validate_utf8(false)
       , allow_trailing_comma(false)
+      , sort_keys(false)
+      , skip_invalid_utf8(false)
+      , allow_nan_inf(false)
     {}
 
     // If true, keys in an object can be non-strings.  (In strict
@@ -85,6 +88,15 @@ namespace json {
 
     // Allow trailing comma in lists of values / items
     bool allow_trailing_comma;
+
+    // Sort keys of all objects before printing out (potentially slow)
+    bool sort_keys;
+
+    // Replace invalid utf8 characters with U+FFFD and continue
+    bool skip_invalid_utf8;
+
+    // true to allow NaN or INF values
+    bool allow_nan_inf;
   };
 
   /*

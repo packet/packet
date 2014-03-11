@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@
 #include "folly/Range.h"
 
 #include <limits>
-#include <stdlib.h>
+#include <cstdlib>
 #include <string>
+#include <iterator>
 #include <sys/mman.h>
 #include <boost/range/concepts.hpp>
 #include <gtest/gtest.h>
@@ -302,6 +303,418 @@ TEST(StringPiece, Constexpr) {
 }
 #endif
 
+TEST(StringPiece, Prefix) {
+  StringPiece a("hello");
+  EXPECT_TRUE(a.startsWith(""));
+  EXPECT_TRUE(a.startsWith("h"));
+  EXPECT_TRUE(a.startsWith('h'));
+  EXPECT_TRUE(a.startsWith("hello"));
+  EXPECT_FALSE(a.startsWith("hellox"));
+  EXPECT_FALSE(a.startsWith('x'));
+  EXPECT_FALSE(a.startsWith("x"));
+
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removePrefix(""));
+    EXPECT_EQ("hello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removePrefix("h"));
+    EXPECT_EQ("ello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removePrefix('h'));
+    EXPECT_EQ("ello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removePrefix("hello"));
+    EXPECT_EQ("", b);
+  }
+  {
+    auto b = a;
+    EXPECT_FALSE(b.removePrefix("hellox"));
+    EXPECT_EQ("hello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_FALSE(b.removePrefix("x"));
+    EXPECT_EQ("hello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_FALSE(b.removePrefix('x'));
+    EXPECT_EQ("hello", b);
+  }
+}
+
+TEST(StringPiece, Suffix) {
+  StringPiece a("hello");
+  EXPECT_TRUE(a.endsWith(""));
+  EXPECT_TRUE(a.endsWith("o"));
+  EXPECT_TRUE(a.endsWith('o'));
+  EXPECT_TRUE(a.endsWith("hello"));
+  EXPECT_FALSE(a.endsWith("xhello"));
+  EXPECT_FALSE(a.endsWith("x"));
+  EXPECT_FALSE(a.endsWith('x'));
+
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removeSuffix(""));
+    EXPECT_EQ("hello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removeSuffix("o"));
+    EXPECT_EQ("hell", b);
+  }
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removeSuffix('o'));
+    EXPECT_EQ("hell", b);
+  }
+  {
+    auto b = a;
+    EXPECT_TRUE(b.removeSuffix("hello"));
+    EXPECT_EQ("", b);
+  }
+  {
+    auto b = a;
+    EXPECT_FALSE(b.removeSuffix("xhello"));
+    EXPECT_EQ("hello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_FALSE(b.removeSuffix("x"));
+    EXPECT_EQ("hello", b);
+  }
+  {
+    auto b = a;
+    EXPECT_FALSE(b.removeSuffix('x'));
+    EXPECT_EQ("hello", b);
+  }
+}
+
+TEST(StringPiece, PrefixEmpty) {
+  StringPiece a;
+  EXPECT_TRUE(a.startsWith(""));
+  EXPECT_FALSE(a.startsWith("a"));
+  EXPECT_FALSE(a.startsWith('a'));
+  EXPECT_TRUE(a.removePrefix(""));
+  EXPECT_EQ("", a);
+  EXPECT_FALSE(a.removePrefix("a"));
+  EXPECT_EQ("", a);
+  EXPECT_FALSE(a.removePrefix('a'));
+  EXPECT_EQ("", a);
+}
+
+TEST(StringPiece, SuffixEmpty) {
+  StringPiece a;
+  EXPECT_TRUE(a.endsWith(""));
+  EXPECT_FALSE(a.endsWith("a"));
+  EXPECT_FALSE(a.endsWith('a'));
+  EXPECT_TRUE(a.removeSuffix(""));
+  EXPECT_EQ("", a);
+  EXPECT_FALSE(a.removeSuffix("a"));
+  EXPECT_EQ("", a);
+  EXPECT_FALSE(a.removeSuffix('a'));
+  EXPECT_EQ("", a);
+}
+
+TEST(StringPiece, split_step_char_delimiter) {
+  //              0         1         2
+  //              012345678901234567890123456
+  auto const s = "this is just  a test string";
+  auto const e = std::next(s, std::strlen(s));
+  EXPECT_EQ('\0', *e);
+
+  folly::StringPiece p(s);
+  EXPECT_EQ(s, p.begin());
+  EXPECT_EQ(e, p.end());
+
+  auto x = p.split_step(' ');
+  EXPECT_EQ(std::next(s, 5), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("this", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(std::next(s, 8), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("is", x);
+
+  x = p.split_step('u');
+  EXPECT_EQ(std::next(s, 10), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("j", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(std::next(s, 13), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("st", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(std::next(s, 14), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(std::next(s, 16), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("a", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(std::next(s, 21), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("test", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(e, p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("string", x);
+
+  x = p.split_step(' ');
+  EXPECT_EQ(e, p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("", x);
+}
+
+TEST(StringPiece, split_step_range_delimiter) {
+  //              0         1         2         3
+  //              0123456789012345678901234567890123
+  auto const s = "this  is  just    a   test  string";
+  auto const e = std::next(s, std::strlen(s));
+  EXPECT_EQ('\0', *e);
+
+  folly::StringPiece p(s);
+  EXPECT_EQ(s, p.begin());
+  EXPECT_EQ(e, p.end());
+
+  auto x = p.split_step("  ");
+  EXPECT_EQ(std::next(s, 6), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("this", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(std::next(s, 10), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("is", x);
+
+  x = p.split_step("u");
+  EXPECT_EQ(std::next(s, 12), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("j", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(std::next(s, 16), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("st", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(std::next(s, 18), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(std::next(s, 21), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("a", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(std::next(s, 28), p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ(" test", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(e, p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("string", x);
+
+  x = p.split_step("  ");
+  EXPECT_EQ(e, p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("", x);
+
+  x = p.split_step(" ");
+  EXPECT_EQ(e, p.begin());
+  EXPECT_EQ(e, p.end());
+  EXPECT_EQ("", x);
+}
+
+void split_step_with_process_noop(folly::StringPiece) {}
+
+TEST(StringPiece, split_step_with_process_char_delimiter) {
+  //              0         1         2
+  //              012345678901234567890123456
+  auto const s = "this is just  a test string";
+  auto const e = std::next(s, std::strlen(s));
+  EXPECT_EQ('\0', *e);
+
+  folly::StringPiece p(s);
+  EXPECT_EQ(s, p.begin());
+  EXPECT_EQ(e, p.end());
+
+  EXPECT_EQ(1, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 5), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("this", x);
+    return 1;
+  })));
+
+  EXPECT_EQ(2, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 8), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("is", x);
+    return 2;
+  })));
+
+  EXPECT_EQ(3, (p.split_step('u', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 10), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("j", x);
+    return 3;
+  })));
+
+  EXPECT_EQ(4, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 13), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("st", x);
+    return 4;
+  })));
+
+  EXPECT_EQ(5, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 14), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("", x);
+    return 5;
+  })));
+
+  EXPECT_EQ(6, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 16), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("a", x);
+    return 6;
+  })));
+
+  EXPECT_EQ(7, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 21), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("test", x);
+    return 7;
+  })));
+
+  EXPECT_EQ(8, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(e, p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("string", x);
+    return 8;
+  })));
+
+  EXPECT_EQ(9, (p.split_step(' ', [&](folly::StringPiece x) {
+    EXPECT_EQ(e, p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("", x);
+    return 9;
+  })));
+
+  EXPECT_TRUE((std::is_same<
+    void,
+    decltype(p.split_step(' ', split_step_with_process_noop))
+  >::value));
+
+  EXPECT_NO_THROW(p.split_step(' ', split_step_with_process_noop));
+}
+
+TEST(StringPiece, split_step_with_process_range_delimiter) {
+  //              0         1         2         3
+  //              0123456789012345678901234567890123
+  auto const s = "this  is  just    a   test  string";
+  auto const e = std::next(s, std::strlen(s));
+  EXPECT_EQ('\0', *e);
+
+  folly::StringPiece p(s);
+  EXPECT_EQ(s, p.begin());
+  EXPECT_EQ(e, p.end());
+
+  EXPECT_EQ(1, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 6), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("this", x);
+    return 1;
+  })));
+
+  EXPECT_EQ(2, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 10), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("is", x);
+    return 2;
+  })));
+
+  EXPECT_EQ(3, (p.split_step("u", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 12), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("j", x);
+    return 3;
+  })));
+
+  EXPECT_EQ(4, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 16), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("st", x);
+    return 4;
+  })));
+
+  EXPECT_EQ(5, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 18), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("", x);
+    return 5;
+  })));
+
+  EXPECT_EQ(6, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 21), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("a", x);
+    return 6;
+  })));
+
+  EXPECT_EQ(7, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(std::next(s, 28), p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ(" test", x);
+    return 7;
+  })));
+
+  EXPECT_EQ(8, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(e, p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("string", x);
+    return 8;
+  })));
+
+  EXPECT_EQ(9, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(e, p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("", x);
+    return 9;
+  })));
+
+  EXPECT_EQ(10, (p.split_step("  ", [&](folly::StringPiece x) {
+    EXPECT_EQ(e, p.begin());
+    EXPECT_EQ(e, p.end());
+    EXPECT_EQ("", x);
+    return 10;
+  })));
+
+  EXPECT_TRUE((std::is_same<
+    void,
+    decltype(p.split_step(' ', split_step_with_process_noop))
+  >::value));
+
+  EXPECT_NO_THROW(p.split_step(' ', split_step_with_process_noop));
+}
+
 TEST(qfind, UInt32_Ranges) {
   vector<uint32_t> a({1, 2, 3, 260, 5});
   vector<uint32_t> b({2, 3, 4});
@@ -492,5 +905,20 @@ TYPED_TEST(NeedleFinderTest, NoSegFault) {
         freeProtectedBuf(buf2);
       }
     }
+  }
+}
+
+TEST(NonConstTest, StringPiece) {
+  std::string hello("hello");
+  MutableStringPiece sp(&hello.front(), hello.size());
+  sp[0] = 'x';
+  EXPECT_EQ("xello", hello);
+  {
+    StringPiece s(sp);
+    EXPECT_EQ("xello", s);
+  }
+  {
+    ByteRange r1(sp);
+    MutableByteRange r2(sp);
   }
 }

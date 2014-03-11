@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,14 @@ enum class CodecType {
    */
   LZ4_VARINT_SIZE = 5,
 
-  NUM_CODEC_TYPES = 6,
+  /**
+   * Use LZMA2 compression.
+   * Levels supported: 0 = no compression, 1 = fast, ..., 9 = best; default = 6
+   */
+  LZMA2 = 6,
+  LZMA2_VARINT_SIZE = 7,
+
+  NUM_CODEC_TYPES = 8,
 };
 
 class Codec {

@@ -107,8 +107,6 @@
         '<(folly_src_home)/SmallLocks.h',
         '<(folly_src_home)/small_vector.h',
         '<(folly_src_home)/sorted_vector_types.h',
-        '<(folly_src_home)/SpookyHash.cpp',
-        '<(folly_src_home)/SpookyHash.h',
         '<(folly_src_home)/SpookyHashV1.cpp',
         '<(folly_src_home)/SpookyHashV1.h',
         '<(folly_src_home)/SpookyHashV2.cpp',

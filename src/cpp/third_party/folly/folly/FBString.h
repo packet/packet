@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,12 @@
 #endif
 #endif
 
+#include <atomic>
+#include <limits>
+#include <type_traits>
+
+// libc++ doesn't provide this header
+#ifndef _LIBCPP_VERSION
 // This file appears in two locations: inside fbcode and in the
 // libstdc++ source code (when embedding fbstring as std::string).
 // To aid in this schizophrenic use, two macros are defined in
@@ -65,6 +71,7 @@
 //   _LIBSTDCXX_FBSTRING - Set inside libstdc++.  This is useful to
 //      gate use inside fbcode v. libstdc++
 #include <bits/c++config.h>
+#endif
 
 #ifdef _LIBSTDCXX_FBSTRING
 
@@ -90,16 +97,17 @@
 #include "folly/Malloc.h"
 #include "folly/Hash.h"
 
+#ifdef _GLIBCXX_SYMVER
+#include <ext/hash_set>
+#include <ext/hash_map>
+#endif
+
 #endif
 
 // We defined these here rather than including Likely.h to avoid
 // redefinition errors when fbstring is imported into libstdc++.
 #define FBSTRING_LIKELY(x)   (__builtin_expect((x), 1))
 #define FBSTRING_UNLIKELY(x) (__builtin_expect((x), 0))
-
-#include <atomic>
-#include <limits>
-#include <type_traits>
 
 // Ignore shadowing warnings within this file, so includers can use -Wshadow.
 #pragma GCC diagnostic push
@@ -148,7 +156,6 @@ OutIt copy_n(InIt b,
              typename std::iterator_traits<InIt>::difference_type n,
              OutIt d) {
   for (; n != 0; --n, ++b, ++d) {
-    assert((const void*)&*d != &*b);
     *d = *b;
   }
   return d;
@@ -860,7 +867,9 @@ private:
   }
 
   size_t smallSize() const {
-    assert(category() == isSmall && small_[maxSmallSize] <= maxSmallSize);
+    assert(category() == isSmall &&
+           static_cast<size_t>(small_[maxSmallSize])
+           <= static_cast<size_t>(maxSmallSize));
     return static_cast<size_t>(maxSmallSize)
       - static_cast<size_t>(small_[maxSmallSize]);
   }
@@ -1688,15 +1697,15 @@ private:
   }
 
 private:
-  template <class FwdIterator, class P>
+  template <class FwdIterator>
   bool replaceAliased(iterator i1, iterator i2,
-                      FwdIterator s1, FwdIterator s2, P*) {
+                      FwdIterator s1, FwdIterator s2, std::false_type) {
     return false;
   }
 
   template <class FwdIterator>
   bool replaceAliased(iterator i1, iterator i2,
-                      FwdIterator s1, FwdIterator s2, value_type*) {
+                      FwdIterator s1, FwdIterator s2, std::true_type) {
     static const std::less_equal<const value_type*> le =
       std::less_equal<const value_type*>();
     const bool aliased = le(&*begin(), &*s1) && le(&*s1, &*end());
@@ -1711,7 +1720,6 @@ private:
     return true;
   }
 
-public:
   template <class FwdIterator>
   void replaceImpl(iterator i1, iterator i2,
                    FwdIterator s1, FwdIterator s2, std::forward_iterator_tag) {
@@ -1719,7 +1727,10 @@ public:
     (void) checker;
 
     // Handle aliased replace
-    if (replaceAliased(i1, i2, s1, s2, &*s1)) {
+    if (replaceAliased(i1, i2, s1, s2,
+          std::integral_constant<bool,
+            std::is_same<FwdIterator, iterator>::value ||
+            std::is_same<FwdIterator, const_iterator>::value>())) {
       return;
     }
 
@@ -2309,7 +2320,29 @@ operator<<(
   std::basic_ostream<typename basic_fbstring<E, T, A, S>::value_type,
   typename basic_fbstring<E, T, A, S>::traits_type>& os,
     const basic_fbstring<E, T, A, S>& str) {
-  os.write(str.data(), str.size());
+#if _LIBCPP_VERSION
+  typename std::basic_ostream<
+    typename basic_fbstring<E, T, A, S>::value_type,
+    typename basic_fbstring<E, T, A, S>::traits_type>::sentry __s(os);
+  if (__s) {
+    typedef std::ostreambuf_iterator<
+      typename basic_fbstring<E, T, A, S>::value_type,
+      typename basic_fbstring<E, T, A, S>::traits_type> _Ip;
+    size_t __len = str.size();
+    bool __left =
+      (os.flags() & std::ios_base::adjustfield) == std::ios_base::left;
+    if (__pad_and_output(_Ip(os),
+                         str.data(),
+                         __left ? str.data() + __len : str.data(),
+                         str.data() + __len,
+                         os,
+                         os.fill()).failed()) {
+      os.setstate(std::ios_base::badbit | std::ios_base::failbit);
+    }
+  }
+#else
+  std::__ostream_insert(os, str.data(), str.size());
+#endif
   return os;
 }
 
@@ -2414,20 +2447,52 @@ _GLIBCXX_END_NAMESPACE_VERSION
 
 } // namespace folly
 
-#pragma GCC diagnostic pop
-
 #ifndef _LIBSTDCXX_FBSTRING
 
+// Hash functions to make fbstring usable with e.g. hash_map
+//
+// Handle interaction with different C++ standard libraries, which
+// expect these types to be in different namespaces.
 namespace std {
+
+template <class C>
+struct hash<folly::basic_fbstring<C> > : private hash<const C*> {
+  size_t operator()(const folly::basic_fbstring<C> & s) const {
+    return hash<const C*>::operator()(s.c_str());
+  }
+};
+
 template <>
 struct hash< ::folly::fbstring> {
   size_t operator()(const ::folly::fbstring& s) const {
     return ::folly::hash::fnv32_buf(s.data(), s.size());
   }
 };
+
 }
 
+#if defined(_GLIBCXX_SYMVER) && !defined(__BIONIC__)
+namespace __gnu_cxx {
+
+template <class C>
+struct hash<folly::basic_fbstring<C> > : private hash<const C*> {
+  size_t operator()(const folly::basic_fbstring<C> & s) const {
+    return hash<const C*>::operator()(s.c_str());
+  }
+};
+
+template <>
+struct hash< ::folly::fbstring> {
+  size_t operator()(const ::folly::fbstring& s) const {
+    return ::folly::hash::fnv32_buf(s.data(), s.size());
+  }
+};
+
+}
+#endif // _GLIBCXX_SYMVER && !__BIONIC__
 #endif // _LIBSTDCXX_FBSTRING
+
+#pragma GCC diagnostic pop
 
 #undef FBSTRING_DISABLE_ADDRESS_SANITIZER
 #undef throw

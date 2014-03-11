@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "folly/io/IOBuf.h"
 #include "folly/io/IOBufQueue.h"
 #include "folly/Likely.h"
+#include "folly/Memory.h"
 
 /**
  * Cursor class for fast iteration over IOBuf chains.
@@ -54,11 +55,28 @@ class CursorBase {
     return crtBuf_->data() + offset_;
   }
 
-  // Space available in the current IOBuf.  May be 0; use peek() instead which
-  // will always point to a non-empty chunk of data or at the end of the
-  // chain.
+  /*
+   * Return the remaining space available in the current IOBuf.
+   *
+   * May return 0 if the cursor is at the end of an IOBuf.  Use peek() instead
+   * if you want to avoid this.  peek() will advance to the next non-empty
+   * IOBuf (up to the end of the chain) if the cursor is currently pointing at
+   * the end of a buffer.
+   */
   size_t length() const {
     return crtBuf_->length() - offset_;
+  }
+
+  /*
+   * Return the space available until the end of the entire IOBuf chain.
+   */
+  size_t totalLength() const {
+    if (crtBuf_ == buffer_) {
+      return crtBuf_->computeChainDataLength() - offset_;
+    }
+    CursorBase end(buffer_->prev());
+    end.offset_ = end.buffer_->length();
+    return end - *this;
   }
 
   Derived& operator+=(size_t offset) {
@@ -66,9 +84,27 @@ class CursorBase {
     p->skip(offset);
     return *p;
   }
+  Derived operator+(size_t offset) const {
+    Derived other(*this);
+    other.skip(offset);
+    return other;
+  }
+
+  /**
+   * Compare cursors for equality/inequality.
+   *
+   * Two cursors are equal if they are pointing to the same location in the
+   * same IOBuf chain.
+   */
+  bool operator==(const Derived& other) const {
+    return (offset_ == other.offset_) && (crtBuf_ == other.crtBuf_);
+  }
+  bool operator!=(const Derived& other) const {
+    return !operator==(other);
+  }
 
   template <class T>
-  typename std::enable_if<std::is_integral<T>::value, T>::type
+  typename std::enable_if<std::is_arithmetic<T>::value, T>::type
   read() {
     T val;
     pull(&val, sizeof(T));
@@ -204,6 +240,12 @@ class CursorBase {
     }
   }
 
+  void clone(folly::IOBuf& buf, size_t len) {
+    if (UNLIKELY(cloneAtMost(buf, len) != len)) {
+      throw std::out_of_range("underflow");
+    }
+  }
+
   void skip(size_t len) {
     if (UNLIKELY(skipAtMost(len) != len)) {
       throw std::out_of_range("underflow");
@@ -232,33 +274,38 @@ class CursorBase {
     }
   }
 
-  size_t cloneAtMost(std::unique_ptr<folly::IOBuf>& buf, size_t len) {
-    buf.reset(nullptr);
+  size_t cloneAtMost(folly::IOBuf& buf, size_t len) {
+    buf = folly::IOBuf();
 
     std::unique_ptr<folly::IOBuf> tmp;
     size_t copied = 0;
-    for (;;) {
+    for (int loopCount = 0; true; ++loopCount) {
       // Fast path: it all fits in one buffer.
       size_t available = length();
       if (LIKELY(available >= len)) {
-        tmp = crtBuf_->cloneOne();
-        tmp->trimStart(offset_);
-        tmp->trimEnd(tmp->length() - len);
-        offset_ += len;
-        if (!buf) {
-          buf = std::move(tmp);
+        if (loopCount == 0) {
+          crtBuf_->cloneOneInto(buf);
+          buf.trimStart(offset_);
+          buf.trimEnd(buf.length() - len);
         } else {
-          buf->prependChain(std::move(tmp));
+          tmp = crtBuf_->cloneOne();
+          tmp->trimStart(offset_);
+          tmp->trimEnd(tmp->length() - len);
+          buf.prependChain(std::move(tmp));
         }
+
+        offset_ += len;
         return copied + len;
       }
 
-      tmp = crtBuf_->cloneOne();
-      tmp->trimStart(offset_);
-      if (!buf) {
-        buf = std::move(tmp);
+
+      if (loopCount == 0) {
+        crtBuf_->cloneOneInto(buf);
+        buf.trimStart(offset_);
       } else {
-        buf->prependChain(std::move(tmp));
+        tmp = crtBuf_->cloneOne();
+        tmp->trimStart(offset_);
+        buf.prependChain(std::move(tmp));
       }
 
       copied += available;
@@ -267,6 +314,14 @@ class CursorBase {
       }
       len -= available;
     }
+  }
+
+  size_t cloneAtMost(std::unique_ptr<folly::IOBuf>& buf, size_t len) {
+    if (!buf) {
+      buf = make_unique<folly::IOBuf>();
+    }
+
+    return cloneAtMost(*buf, len);
   }
 
   size_t skipAtMost(size_t len) {
@@ -344,6 +399,10 @@ class CursorBase {
 
   ~CursorBase(){}
 
+  BufType* head() {
+    return buffer_;
+  }
+
   bool tryAdvanceBuffer() {
     BufType* nextBuf = crtBuf_->next();
     if (UNLIKELY(nextBuf == buffer_)) {
@@ -368,7 +427,7 @@ template <class Derived>
 class Writable {
  public:
   template <class T>
-  typename std::enable_if<std::is_integral<T>::value>::type
+  typename std::enable_if<std::is_arithmetic<T>::value>::type
   write(T value) {
     const uint8_t* u8 = reinterpret_cast<const uint8_t*>(&value);
     Derived* d = static_cast<Derived*>(this);
@@ -431,7 +490,22 @@ class RWCursor
    * by coalescing subsequent buffers from the chain as necessary.
    */
   void gather(size_t n) {
+    // Forbid attempts to gather beyond the end of this IOBuf chain.
+    // Otherwise we could try to coalesce the head of the chain and end up
+    // accidentally freeing it, invalidating the pointer owned by external
+    // code.
+    //
+    // If crtBuf_ == head() then IOBuf::gather() will perform all necessary
+    // checking.  We only have to perform an explicit check here when calling
+    // gather() on a non-head element.
+    if (this->crtBuf_ != this->head() && this->totalLength() < n) {
+      throw std::overflow_error("cannot gather() past the end of the chain");
+    }
     this->crtBuf_->gather(this->offset_ + n);
+  }
+  void gatherAtMost(size_t n) {
+    size_t size = std::min(n, this->totalLength());
+    return this->crtBuf_->gather(this->offset_ + size);
   }
 
   size_t pushAtMost(const uint8_t* buf, size_t len) {
@@ -465,7 +539,7 @@ class RWCursor
     folly::IOBuf* nextBuf;
     if (this->offset_ == 0) {
       // Can just prepend
-      nextBuf = buf.get();
+      nextBuf = this->crtBuf_;
       this->crtBuf_->prependChain(std::move(buf));
     } else {
       std::unique_ptr<folly::IOBuf> remaining;
@@ -519,7 +593,7 @@ typedef RWCursor<CursorAccess::UNSHARE> RWUnshareCursor;
  */
 class Appender : public detail::Writable<Appender> {
  public:
-  Appender(IOBuf* buf, uint32_t growth)
+  Appender(IOBuf* buf, uint64_t growth)
     : buffer_(buf),
       crtBuf_(buf->prev()),
       growth_(growth) {
@@ -545,7 +619,7 @@ class Appender : public detail::Writable<Appender> {
    * Ensure at least n contiguous bytes available to write.
    * Postcondition: length() >= n.
    */
-  void ensure(uint32_t n) {
+  void ensure(uint64_t n) {
     if (LIKELY(length() >= n)) {
       return;
     }
@@ -597,7 +671,7 @@ class Appender : public detail::Writable<Appender> {
 
   IOBuf* buffer_;
   IOBuf* crtBuf_;
-  uint32_t growth_;
+  uint64_t growth_;
 };
 
 class QueueAppender : public detail::Writable<QueueAppender> {
@@ -607,11 +681,11 @@ class QueueAppender : public detail::Writable<QueueAppender> {
    * space in the queue, we grow no more than growth bytes at once
    * (unless you call ensure() with a bigger value yourself).
    */
-  QueueAppender(IOBufQueue* queue, uint32_t growth) {
+  QueueAppender(IOBufQueue* queue, uint64_t growth) {
     reset(queue, growth);
   }
 
-  void reset(IOBufQueue* queue, uint32_t growth) {
+  void reset(IOBufQueue* queue, uint64_t growth) {
     queue_ = queue;
     growth_ = growth;
   }
@@ -626,10 +700,10 @@ class QueueAppender : public detail::Writable<QueueAppender> {
 
   // Ensure at least n contiguous; can go above growth_, throws if
   // not enough room.
-  void ensure(uint32_t n) { queue_->preallocate(n, growth_); }
+  void ensure(uint64_t n) { queue_->preallocate(n, growth_); }
 
   template <class T>
-  typename std::enable_if<std::is_integral<T>::value>::type
+  typename std::enable_if<std::is_arithmetic<T>::value>::type
   write(T value) {
     // We can't fail.
     auto p = queue_->preallocate(sizeof(T), growth_);

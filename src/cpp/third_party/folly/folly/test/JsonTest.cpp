@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -302,6 +302,23 @@ TEST(Json, UTF8Validation) {
   // test validate_utf8 with invalid utf8
   EXPECT_ANY_THROW(folly::json::serialize("a\xe0\xa0\x80z\xc0\x80", opts));
   EXPECT_ANY_THROW(folly::json::serialize("a\xe0\xa0\x80z\xe0\x80\x80", opts));
+
+  opts.skip_invalid_utf8 = true;
+  EXPECT_EQ(folly::json::serialize("a\xe0\xa0\x80z\xc0\x80", opts),
+            "\"a\xe0\xa0\x80z\ufffd\ufffd\"");
+  EXPECT_EQ(folly::json::serialize("a\xe0\xa0\x80z\xc0\x80\x80", opts),
+            "\"a\xe0\xa0\x80z\ufffd\ufffd\ufffd\"");
+  EXPECT_EQ(folly::json::serialize("z\xc0\x80z\xe0\xa0\x80", opts),
+            "\"z\ufffd\ufffdz\xe0\xa0\x80\"");
+
+  opts.encode_non_ascii = true;
+  EXPECT_EQ(folly::json::serialize("a\xe0\xa0\x80z\xc0\x80", opts),
+            "\"a\\u0800z\\ufffd\\ufffd\"");
+  EXPECT_EQ(folly::json::serialize("a\xe0\xa0\x80z\xc0\x80\x80", opts),
+            "\"a\\u0800z\\ufffd\\ufffd\\ufffd\"");
+  EXPECT_EQ(folly::json::serialize("z\xc0\x80z\xe0\xa0\x80", opts),
+            "\"z\\ufffd\\ufffdz\\u0800\"");
+
 }
 
 
@@ -329,6 +346,37 @@ TEST(Json, ParseNonStringKeys) {
   // test we can read in doubles
   auto dval = parseJson("{1.5:[]}", opts);
   EXPECT_EQ(1.5, dval.items().begin()->first.asDouble());
+}
+
+TEST(Json, SortKeys) {
+  folly::json::serialization_opts opts_on, opts_off;
+  opts_on.sort_keys = true;
+  opts_off.sort_keys = false;
+
+  dynamic value = dynamic::object
+    ("foo", "bar")
+    ("junk", 12)
+    ("another", 32.2)
+    ("a",
+      {
+        dynamic::object("a", "b")
+                       ("c", "d"),
+        12.5,
+        "Yo Dawg",
+        { "heh" },
+        nullptr
+      }
+    )
+    ;
+
+  std::string sorted_keys =
+    R"({"a":[{"a":"b","c":"d"},12.5,"Yo Dawg",["heh"],null],)"
+    R"("another":32.2,"foo":"bar","junk":12})";
+
+  EXPECT_EQ(value, parseJson(folly::json::serialize(value, opts_on)));
+  EXPECT_EQ(value, parseJson(folly::json::serialize(value, opts_off)));
+
+  EXPECT_EQ(sorted_keys, folly::json::serialize(value, opts_on));
 }
 
 BENCHMARK(jsonSerialize, iters) {
@@ -416,6 +464,16 @@ BENCHMARK(parseBigString, iters) {
       "akjhfk jhkjlakjhfk jhkjlakjhfk jhkjl akjhfk"
       "akjhfk jhkjlakjhfk jhkjlakjhfk jhkjl akjhfk"
       "\"");
+  }
+}
+
+BENCHMARK(toJson, iters) {
+  dynamic something = parseJson(
+    "{\"old_value\":40,\"changed\":true,\"opened\":false,\"foo\":[1,2,3,4,5,6]}"
+  );
+
+  for (int i = 0; i < iters; i++) {
+    toJson(something);
   }
 }
 

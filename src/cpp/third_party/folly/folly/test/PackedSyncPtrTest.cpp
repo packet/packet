@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ TEST(PackedSyncPtr, Basic) {
   sp.setExtra(0x13);
   EXPECT_EQ(sp.extra(), 0x13);
   EXPECT_EQ((sp.get() + 1)->second, 7);
-  delete sp.get();
+  delete[] sp.get();
   auto newP = new std::pair<int,int>();
   sp.set(newP);
   EXPECT_EQ(sp.extra(), 0x13);

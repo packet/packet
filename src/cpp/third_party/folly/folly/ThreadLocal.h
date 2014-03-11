@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,6 +124,11 @@ class ThreadLocal {
  * We use a single global pthread_key_t per Tag to manage object destruction and
  * memory cleanup upon thread exit because there is a finite number of
  * pthread_key_t's available per machine.
+ *
+ * NOTE: Apple platforms don't support the same semantics for __thread that
+ *       Linux does (and it's only supported at all on i386). For these, use
+ *       pthread_setspecific()/pthread_getspecific() for the per-thread
+ *       storage.
  */
 
 template<class T, class Tag=void>

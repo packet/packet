@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,15 +98,23 @@ TEST(IOBuf, copy_assign_convert) {
   EXPECT_EQ(3, cursor4.read<uint8_t>());
 }
 
-TEST(IOBuf, overloading) {
-  unique_ptr<IOBuf> iobuf1(IOBuf::create(20));
-  iobuf1->append(20);
-  RWPrivateCursor wcursor(iobuf1.get());
+TEST(IOBuf, arithmetic) {
+  IOBuf iobuf1(IOBuf::CREATE, 20);
+  iobuf1.append(20);
+  RWPrivateCursor wcursor(&iobuf1);
   wcursor += 1;
   wcursor.write((uint8_t)1);
-  Cursor cursor(iobuf1.get());
+  Cursor cursor(&iobuf1);
   cursor += 1;
   EXPECT_EQ(1, cursor.read<uint8_t>());
+
+  Cursor start(&iobuf1);
+  Cursor cursor2 = start + 9;
+  EXPECT_EQ(7, cursor2 - cursor);
+  EXPECT_NE(cursor, cursor2);
+  cursor += 8;
+  cursor2 = cursor2 + 1;
+  EXPECT_EQ(cursor, cursor2);
 }
 
 TEST(IOBuf, endian) {
@@ -236,6 +244,48 @@ TEST(IOBuf, PullAndPeek) {
   }
 }
 
+TEST(IOBuf, Gather) {
+  std::unique_ptr<IOBuf> iobuf1(IOBuf::create(10));
+  append(iobuf1, "he");
+  std::unique_ptr<IOBuf> iobuf2(IOBuf::create(10));
+  append(iobuf2, "llo ");
+  std::unique_ptr<IOBuf> iobuf3(IOBuf::create(10));
+  append(iobuf3, "world");
+  iobuf1->prependChain(std::move(iobuf2));
+  iobuf1->prependChain(std::move(iobuf3));
+  EXPECT_EQ(3, iobuf1->countChainElements());
+  EXPECT_EQ(11, iobuf1->computeChainDataLength());
+
+  // Attempting to gather() more data than available in the chain should fail.
+  // Try from the very beginning of the chain.
+  RWPrivateCursor cursor(iobuf1.get());
+  EXPECT_THROW(cursor.gather(15), std::overflow_error);
+  // Now try from the middle of the chain
+  cursor += 3;
+  EXPECT_THROW(cursor.gather(10), std::overflow_error);
+
+  // Calling gatherAtMost() should succeed, however, and just gather
+  // as much as it can
+  cursor.gatherAtMost(10);
+  EXPECT_EQ(8, cursor.length());
+  EXPECT_EQ(8, cursor.totalLength());
+  EXPECT_EQ("lo world",
+            folly::StringPiece(reinterpret_cast<const char*>(cursor.data()),
+                               cursor.length()));
+  EXPECT_EQ(2, iobuf1->countChainElements());
+  EXPECT_EQ(11, iobuf1->computeChainDataLength());
+
+  // Now try gather again on the chain head
+  cursor = RWPrivateCursor(iobuf1.get());
+  cursor.gather(5);
+  // Since gather() doesn't split buffers, everything should be collapsed into
+  // a single buffer now.
+  EXPECT_EQ(1, iobuf1->countChainElements());
+  EXPECT_EQ(11, iobuf1->computeChainDataLength());
+  EXPECT_EQ(11, cursor.length());
+  EXPECT_EQ(11, cursor.totalLength());
+}
+
 TEST(IOBuf, cloneAndInsert) {
   std::unique_ptr<IOBuf> iobuf1(IOBuf::create(10));
   append(iobuf1, "he");
@@ -273,9 +323,11 @@ TEST(IOBuf, cloneAndInsert) {
     cursor.skip(1);
 
     cursor.insert(std::move(cloned));
-    EXPECT_EQ(6, iobuf1->countChainElements());
+    cursor.insert(folly::IOBuf::create(0));
+    EXPECT_EQ(7, iobuf1->countChainElements());
     EXPECT_EQ(14, iobuf1->computeChainDataLength());
-    // Check that nextBuf got set correctly
+    // Check that nextBuf got set correctly to the buffer with 1 byte left
+    EXPECT_EQ(1, cursor.peek().second);
     cursor.read<uint8_t>();
   }
 
@@ -289,7 +341,7 @@ TEST(IOBuf, cloneAndInsert) {
     cursor.skip(1);
 
     cursor.insert(std::move(cloned));
-    EXPECT_EQ(7, iobuf1->countChainElements());
+    EXPECT_EQ(8, iobuf1->countChainElements());
     EXPECT_EQ(15, iobuf1->computeChainDataLength());
     // Check that nextBuf got set correctly
     cursor.read<uint8_t>();
@@ -302,7 +354,7 @@ TEST(IOBuf, cloneAndInsert) {
     EXPECT_EQ(1, cloned->computeChainDataLength());
 
     cursor.insert(std::move(cloned));
-    EXPECT_EQ(8, iobuf1->countChainElements());
+    EXPECT_EQ(9, iobuf1->countChainElements());
     EXPECT_EQ(16, iobuf1->computeChainDataLength());
     // Check that nextBuf got set correctly
     cursor.read<uint8_t>();
@@ -415,7 +467,7 @@ TEST(IOBuf, StringOperations) {
   {
     std::unique_ptr<IOBuf> chain(IOBuf::create(16));
     Appender app(chain.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("hello\0world\0\x01"), 13);
+    app.push(reinterpret_cast<const uint8_t*>("hello\0world\0\x01"), 13);
 
     Cursor curs(chain.get());
     EXPECT_STREQ("hello", curs.readTerminatedString().c_str());
@@ -423,12 +475,26 @@ TEST(IOBuf, StringOperations) {
     EXPECT_EQ(1, curs.read<uint8_t>());
   }
 
+  // Test multiple buffers where the first is empty and the string starts in
+  // the second buffer.
+  {
+    std::unique_ptr<IOBuf> chain(IOBuf::create(8));
+    chain->prependChain(IOBuf::create(12));
+    Appender app(chain.get(), 0);
+    app.push(reinterpret_cast<const uint8_t*>("hello world\0"), 12);
+
+    Cursor curs(chain.get());
+    EXPECT_STREQ("hello world", curs.readTerminatedString().c_str());
+  }
+
   // Test multiple buffers with a single null-terminated string spanning them
   {
     std::unique_ptr<IOBuf> chain(IOBuf::create(8));
     chain->prependChain(IOBuf::create(8));
-    Appender app(chain.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("hello world\0"), 12);
+    chain->append(8);
+    chain->next()->append(4);
+    RWPrivateCursor rwc(chain.get());
+    rwc.push(reinterpret_cast<const uint8_t*>("hello world\0"), 12);
 
     Cursor curs(chain.get());
     EXPECT_STREQ("hello world", curs.readTerminatedString().c_str());
@@ -439,18 +505,18 @@ TEST(IOBuf, StringOperations) {
   {
     std::unique_ptr<IOBuf> chain(IOBuf::create(16));
     Appender app(chain.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("hello world\0"), 12);
+    app.push(reinterpret_cast<const uint8_t*>("hello world\0"), 12);
 
     Cursor curs(chain.get());
     EXPECT_THROW(curs.readTerminatedString('\0', 5), std::length_error);
   }
 
-  // Test reading a null-termianted string from a chain with an empty buffer at
+  // Test reading a null-terminated string from a chain with an empty buffer at
   // the front
   {
     std::unique_ptr<IOBuf> buf(IOBuf::create(8));
     Appender app(buf.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("hello\0"), 6);
+    app.push(reinterpret_cast<const uint8_t*>("hello\0"), 6);
     std::unique_ptr<IOBuf> chain(IOBuf::create(8));
     chain->prependChain(std::move(buf));
 
@@ -463,7 +529,7 @@ TEST(IOBuf, StringOperations) {
   {
     std::unique_ptr<IOBuf> chain(IOBuf::create(16));
     Appender app(chain.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("helloworld\x01"), 11);
+    app.push(reinterpret_cast<const uint8_t*>("helloworld\x01"), 11);
 
     Cursor curs(chain.get());
     EXPECT_STREQ("hello", curs.readFixedString(5).c_str());
@@ -471,12 +537,26 @@ TEST(IOBuf, StringOperations) {
     EXPECT_EQ(1, curs.read<uint8_t>());
   }
 
+  // Test multiple buffers where the first is empty and a fixed-length string
+  // starts in the second buffer.
+  {
+    std::unique_ptr<IOBuf> chain(IOBuf::create(8));
+    chain->prependChain(IOBuf::create(16));
+    Appender app(chain.get(), 0);
+    app.push(reinterpret_cast<const uint8_t*>("hello world"), 11);
+
+    Cursor curs(chain.get());
+    EXPECT_STREQ("hello world", curs.readFixedString(11).c_str());
+  }
+
   // Test multiple buffers with a single fixed-length string spanning them
   {
     std::unique_ptr<IOBuf> chain(IOBuf::create(8));
     chain->prependChain(IOBuf::create(8));
-    Appender app(chain.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("hello world"), 11);
+    chain->append(7);
+    chain->next()->append(4);
+    RWPrivateCursor rwc(chain.get());
+    rwc.push(reinterpret_cast<const uint8_t*>("hello world"), 11);
 
     Cursor curs(chain.get());
     EXPECT_STREQ("hello world", curs.readFixedString(11).c_str());
@@ -487,7 +567,7 @@ TEST(IOBuf, StringOperations) {
   {
     std::unique_ptr<IOBuf> buf(IOBuf::create(8));
     Appender app(buf.get(), 0);
-    app.pushAtMost(reinterpret_cast<const uint8_t*>("hello"), 5);
+    app.push(reinterpret_cast<const uint8_t*>("hello"), 5);
     std::unique_ptr<IOBuf> chain(IOBuf::create(8));
     chain->prependChain(std::move(buf));
 
