@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,26 @@ TEST(IOBuf, TakeOwnership) {
   iobuf3.reset();
   EXPECT_EQ(1, deleteCount);
 
+  deleteCount = 0;
+  {
+    uint32_t size4 = 1234;
+    uint8_t *buf4 = new uint8_t[size4];
+    uint32_t length4 = 48;
+    IOBuf iobuf4(IOBuf::TAKE_OWNERSHIP, buf4, size4, length4,
+                 deleteArrayBuffer, &deleteCount);
+    EXPECT_EQ(buf4, iobuf4.data());
+    EXPECT_EQ(length4, iobuf4.length());
+    EXPECT_EQ(buf4, iobuf4.buffer());
+    EXPECT_EQ(size4, iobuf4.capacity());
 
+    IOBuf iobuf5 = std::move(iobuf4);
+    EXPECT_EQ(buf4, iobuf5.data());
+    EXPECT_EQ(length4, iobuf5.length());
+    EXPECT_EQ(buf4, iobuf5.buffer());
+    EXPECT_EQ(size4, iobuf5.capacity());
+    EXPECT_EQ(0, deleteCount);
+  }
+  EXPECT_EQ(1, deleteCount);
 }
 
 TEST(IOBuf, WrapBuffer) {
@@ -161,6 +180,69 @@ TEST(IOBuf, WrapBuffer) {
   EXPECT_EQ(size2, iobuf2->length());
   EXPECT_EQ(buf2.get(), iobuf2->buffer());
   EXPECT_EQ(size2, iobuf2->capacity());
+
+  uint32_t size3 = 4321;
+  unique_ptr<uint8_t[]> buf3(new uint8_t[size3]);
+  IOBuf iobuf3(IOBuf::WRAP_BUFFER, buf3.get(), size3);
+  EXPECT_EQ(buf3.get(), iobuf3.data());
+  EXPECT_EQ(size3, iobuf3.length());
+  EXPECT_EQ(buf3.get(), iobuf3.buffer());
+  EXPECT_EQ(size3, iobuf3.capacity());
+}
+
+TEST(IOBuf, CreateCombined) {
+  // Create a combined IOBuf, then destroy it.
+  // The data buffer and IOBuf both become unused as part of the destruction
+  {
+    auto buf = IOBuf::createCombined(256);
+    EXPECT_FALSE(buf->isShared());
+  }
+
+  // Create a combined IOBuf, clone from it, and then destroy the original
+  // IOBuf.  The data buffer cannot be deleted until the clone is also
+  // destroyed.
+  {
+    auto bufA = IOBuf::createCombined(256);
+    EXPECT_FALSE(bufA->isShared());
+    auto bufB = bufA->clone();
+    EXPECT_TRUE(bufA->isShared());
+    EXPECT_TRUE(bufB->isShared());
+    bufA.reset();
+    EXPECT_FALSE(bufB->isShared());
+  }
+
+  // Create a combined IOBuf, then call reserve() to get a larger buffer.
+  // The IOBuf no longer points to the combined data buffer, but the
+  // overall memory segment cannot be deleted until the IOBuf is also
+  // destroyed.
+  {
+    auto buf = IOBuf::createCombined(256);
+    buf->reserve(0, buf->capacity() + 100);
+  }
+
+  // Create a combined IOBuf, clone from it, then call unshare() on the original
+  // buffer.  This creates a situation where bufB is pointing at the combined
+  // buffer associated with bufA, but bufA is now using a different buffer.
+  auto testSwap = [](bool resetAFirst) {
+    auto bufA = IOBuf::createCombined(256);
+    EXPECT_FALSE(bufA->isShared());
+    auto bufB = bufA->clone();
+    EXPECT_TRUE(bufA->isShared());
+    EXPECT_TRUE(bufB->isShared());
+    bufA->unshare();
+    EXPECT_FALSE(bufA->isShared());
+    EXPECT_FALSE(bufB->isShared());
+
+    if (resetAFirst) {
+      bufA.reset();
+      bufB.reset();
+    } else {
+      bufB.reset();
+      bufA.reset();
+    }
+  };
+  testSwap(true);
+  testSwap(false);
 }
 
 void fillBuf(uint8_t* buf, uint32_t length, boost::mt19937& gen) {
@@ -392,8 +474,7 @@ TEST(IOBuf, Chaining) {
   EXPECT_TRUE(iob1->isShared());
 
   EXPECT_TRUE(iob1->isSharedOne());
-  // since iob2 has a small internal buffer, it will never be shared
-  EXPECT_FALSE(iob2ptr->isSharedOne());
+  EXPECT_TRUE(iob2ptr->isSharedOne());
   EXPECT_TRUE(iob3ptr->isSharedOne());
   EXPECT_TRUE(iob4ptr->isSharedOne());
   EXPECT_TRUE(iob5ptr->isSharedOne());
@@ -432,6 +513,8 @@ TEST(IOBuf, Chaining) {
   EXPECT_EQ(0, arrayBufFreeCount);
 
   // Buffer lengths: 1500 20 1234 900 321
+  // Attempting to gather more data than available should fail
+  EXPECT_THROW(chainClone->gather(4000), std::overflow_error);
   // Coalesce the first 3 buffers
   chainClone->gather(1521);
   EXPECT_EQ(3, chainClone->countChainElements());
@@ -494,6 +577,14 @@ TEST(IOBuf, Chaining) {
   EXPECT_EQ(3, iob2->computeChainDataLength());
 }
 
+void testFreeFn(void* buffer, void* ptr) {
+  uint32_t* freeCount = static_cast<uint32_t*>(ptr);;
+  delete[] static_cast<uint8_t*>(buffer);
+  if (freeCount) {
+    ++(*freeCount);
+  }
+};
+
 TEST(IOBuf, Reserve) {
   uint32_t fillSeed = 0x23456789;
   boost::mt19937 gen(fillSeed);
@@ -555,6 +646,26 @@ TEST(IOBuf, Reserve) {
     EXPECT_EQ(0, iob->headroom());
     EXPECT_LE(2000, iob->tailroom());
   }
+
+  // Test reserving from a user-allocated buffer.
+  {
+    uint8_t* buf = static_cast<uint8_t*>(malloc(100));
+    auto iob = IOBuf::takeOwnership(buf, 100);
+    iob->reserve(0, 2000);
+    EXPECT_EQ(0, iob->headroom());
+    EXPECT_LE(2000, iob->tailroom());
+  }
+
+  // Test reserving from a user-allocated with a custom free function.
+  {
+    uint32_t freeCount{0};
+    uint8_t* buf = new uint8_t[100];
+    auto iob = IOBuf::takeOwnership(buf, 100, testFreeFn, &freeCount);
+    iob->reserve(0, 2000);
+    EXPECT_EQ(0, iob->headroom());
+    EXPECT_LE(2000, iob->tailroom());
+    EXPECT_EQ(1, freeCount);
+  }
 }
 
 TEST(IOBuf, copyBuffer) {
@@ -576,6 +687,13 @@ TEST(IOBuf, copyBuffer) {
   EXPECT_EQ(3, buf->headroom());
   EXPECT_EQ(0, buf->length());
   EXPECT_LE(6, buf->tailroom());
+
+  // A stack-allocated version
+  IOBuf stackBuf(IOBuf::COPY_BUFFER, s, 1, 2);
+  EXPECT_EQ(1, stackBuf.headroom());
+  EXPECT_EQ(s, std::string(reinterpret_cast<const char*>(stackBuf.data()),
+                           stackBuf.length()));
+  EXPECT_LE(2, stackBuf.tailroom());
 }
 
 TEST(IOBuf, maybeCopyBuffer) {
@@ -667,7 +785,7 @@ TEST(IOBuf, takeOwnershipUniquePtr) {
   destructorCount = 0;
   {
     std::unique_ptr<OwnershipTestClass[], CustomDeleter>
-      p(new OwnershipTestClass[2], customDeleteArray);
+      p(new OwnershipTestClass[2], CustomDeleter(customDeleteArray));
     std::unique_ptr<IOBuf> buf(IOBuf::takeOwnership(std::move(p), 2));
     EXPECT_EQ(2 * sizeof(OwnershipTestClass), buf->length());
     EXPECT_EQ(0, destructorCount);
@@ -706,13 +824,19 @@ TEST(TypedIOBuf, Simple) {
     EXPECT_EQ(i, typed.data()[i]);
   }
 }
+enum BufType {
+  CREATE,
+  TAKE_OWNERSHIP_MALLOC,
+  TAKE_OWNERSHIP_CUSTOM,
+  USER_OWNED,
+};
 
 // chain element size, number of elements in chain, shared
 class MoveToFbStringTest
-  : public ::testing::TestWithParam<std::tr1::tuple<int, int, bool>> {
+  : public ::testing::TestWithParam<std::tr1::tuple<int, int, bool, BufType>> {
  protected:
   void SetUp() {
-    std::tr1::tie(elementSize_, elementCount_, shared_) = GetParam();
+    std::tr1::tie(elementSize_, elementCount_, shared_, type_) = GetParam();
     buf_ = makeBuf();
     for (int i = 0; i < elementCount_ - 1; ++i) {
       buf_->prependChain(makeBuf());
@@ -727,9 +851,36 @@ class MoveToFbStringTest
   }
 
   std::unique_ptr<IOBuf> makeBuf() {
-    auto buf = IOBuf::create(elementSize_);
-    memset(buf->writableTail(), 'x', elementSize_);
-    buf->append(elementSize_);
+    unique_ptr<IOBuf> buf;
+    switch (type_) {
+      case CREATE:
+        buf = IOBuf::create(elementSize_);
+        buf->append(elementSize_);
+        break;
+      case TAKE_OWNERSHIP_MALLOC: {
+        void* data = malloc(elementSize_);
+        if (!data) {
+          throw std::bad_alloc();
+        }
+        buf = IOBuf::takeOwnership(data, elementSize_);
+        break;
+      }
+      case TAKE_OWNERSHIP_CUSTOM: {
+        uint8_t* data = new uint8_t[elementSize_];
+        buf = IOBuf::takeOwnership(data, elementSize_, testFreeFn);
+        break;
+      }
+      case USER_OWNED: {
+        unique_ptr<uint8_t[]> data(new uint8_t[elementSize_]);
+        buf = IOBuf::wrapBuffer(data.get(), elementSize_);
+        ownedBuffers_.emplace_back(std::move(data));
+        break;
+      }
+      default:
+        throw std::invalid_argument("unexpected buffer type parameter");
+        break;
+    }
+    memset(buf->writableData(), 'x', elementSize_);
     return buf;
   }
 
@@ -746,8 +897,10 @@ class MoveToFbStringTest
   int elementSize_;
   int elementCount_;
   bool shared_;
+  BufType type_;
   std::unique_ptr<IOBuf> buf_;
   std::unique_ptr<IOBuf> buf2_;
+  std::vector<std::unique_ptr<uint8_t[]>> ownedBuffers_;
 };
 
 TEST_P(MoveToFbStringTest, Simple) {
@@ -763,7 +916,9 @@ INSTANTIATE_TEST_CASE_P(
     ::testing::Combine(
         ::testing::Values(0, 1, 24, 256, 1 << 10, 1 << 20),  // element size
         ::testing::Values(1, 2, 10),                         // element count
-        ::testing::Bool()));                                 // shared
+        ::testing::Bool(),                                   // shared
+        ::testing::Values(CREATE, TAKE_OWNERSHIP_MALLOC,
+                          TAKE_OWNERSHIP_CUSTOM, USER_OWNED)));
 
 TEST(IOBuf, getIov) {
   uint32_t fillSeed = 0xdeadbeef;
@@ -808,6 +963,47 @@ TEST(IOBuf, getIov) {
   buf->prev()->clear();
   iov = buf->getIov();
   EXPECT_EQ(count - 3, iov.size());
+}
+
+TEST(IOBuf, move) {
+  // Default allocate an IOBuf on the stack
+  IOBuf outerBuf;
+  char data[] = "foobar";
+  uint32_t length = sizeof(data);
+  uint32_t actualCapacity{0};
+  const void* ptr{nullptr};
+
+  {
+    // Create a small IOBuf on the stack.
+    // Note that IOBufs created on the stack always use an external buffer.
+    IOBuf b1(IOBuf::CREATE, 10);
+    actualCapacity = b1.capacity();
+    EXPECT_GE(actualCapacity, 10);
+    EXPECT_EQ(0, b1.length());
+    EXPECT_FALSE(b1.isShared());
+    ptr = b1.data();
+    ASSERT_TRUE(ptr != nullptr);
+    memcpy(b1.writableTail(), data, length);
+    b1.append(length);
+    EXPECT_EQ(length, b1.length());
+
+    // Use the move constructor
+    IOBuf b2(std::move(b1));
+    EXPECT_EQ(ptr, b2.data());
+    EXPECT_EQ(length, b2.length());
+    EXPECT_EQ(actualCapacity, b2.capacity());
+    EXPECT_FALSE(b2.isShared());
+
+    // Use the move assignment operator
+    outerBuf = std::move(b2);
+    // Close scope, destroying b1 and b2
+    // (which are both be invalid now anyway after moving out of them)
+  }
+
+  EXPECT_EQ(ptr, outerBuf.data());
+  EXPECT_EQ(length, outerBuf.length());
+  EXPECT_EQ(actualCapacity, outerBuf.capacity());
+  EXPECT_FALSE(outerBuf.isShared());
 }
 
 int main(int argc, char** argv) {

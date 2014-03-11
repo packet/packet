@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -463,10 +463,27 @@ struct ThisIsAVeryLongStructureName {
 };
 }  // namespace folly_test
 
+#if FOLLY_HAVE_CPLUS_DEMANGLE_V3_CALLBACK
 TEST(System, demangle) {
-  EXPECT_EQ("folly_test::ThisIsAVeryLongStructureName",
-            demangle(typeid(folly_test::ThisIsAVeryLongStructureName)));
+  char expected[] = "folly_test::ThisIsAVeryLongStructureName";
+  EXPECT_STREQ(
+      expected,
+      demangle(typeid(folly_test::ThisIsAVeryLongStructureName)).c_str());
+
+  {
+    char buf[sizeof(expected)];
+    EXPECT_EQ(sizeof(expected) - 1,
+              demangle(typeid(folly_test::ThisIsAVeryLongStructureName),
+                       buf, sizeof(buf)));
+    EXPECT_STREQ(expected, buf);
+
+    EXPECT_EQ(sizeof(expected) - 1,
+              demangle(typeid(folly_test::ThisIsAVeryLongStructureName),
+                       buf, 11));
+    EXPECT_STREQ("folly_test", buf);
+  }
 }
+#endif
 
 namespace {
 
@@ -1011,4 +1028,3 @@ int main(int argc, char *argv[]) {
   }
   return ret;
 }
-

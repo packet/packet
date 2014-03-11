@@ -52,12 +52,12 @@ AX_BOOST_SYSTEM
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h features.h inttypes.h limits.h stdint.h stdlib.h string.h sys/time.h unistd.h mutex.h malloc.h emmintrin.h byteswap.h])
+AC_CHECK_HEADERS([fcntl.h features.h inttypes.h limits.h stdint.h stdlib.h string.h sys/time.h unistd.h mutex.h malloc.h emmintrin.h byteswap.h bits/functexcept.h])
 
-AC_CHECK_HEADER(double-conversion.h, [], [AC_MSG_ERROR(
+AC_CHECK_HEADER(double-conversion/double-conversion.h, [], [AC_MSG_ERROR(
                 [Couldn't find double-conversion.h, please download from \
                 http://code.google.com/p/double-conversion/])], [])
-AC_CHECK_LIB([double_conversion_pic],[ceil],[],[AC_MSG_ERROR(
+AC_CHECK_LIB([double-conversion],[ceil],[],[AC_MSG_ERROR(
              [Please install double-conversion library])])
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -127,6 +127,26 @@ AC_COMPILE_IFELSE(
              [Define to 1 if we have a usable std::is_trivially_copyable<T>
               implementation.])])
 
+# Figure out if we support weak symbols. If not, we will link in some null
+# stubs for functions that would otherwise be weak.
+AC_LINK_IFELSE(
+  [AC_LANG_SOURCE[
+    extern "C" void configure_link_extern_weak_test() __attribute__((weak));
+    int main(int argc, char** argv) {
+        return configure_link_extern_weak_test == nullptr;
+    }]
+  ],
+  [
+    ac_have_weak_symbols="yes"
+    AC_DEFINE([HAVE_WEAK_SYMBOLS], [1],
+              [Define to 1 if the linker supports weak symbols.])])
+
+AC_SEARCH_LIBS([cplus_demangle_v3_callback], [iberty])
+if test "$ac_cv_search_cplus_demangle_v3_callback" != "no" ; then
+  AC_DEFINE([HAVE_CPLUS_DEMANGLE_V3_CALLBACK], [1],
+            [Define to 1 if we have cplus_demangle_v3_callback.])
+fi
+
 # Check for clock_gettime(2). This is not in an AC_CHECK_FUNCS() because we
 # want to link with librt if necessary.
 AC_SEARCH_LIBS([clock_gettime], [rt],
@@ -160,6 +180,8 @@ AC_SUBST(AM_LDFLAGS, "$BOOST_LDFLAGS $BOOST_THREAD_LIB $BOOST_SYSTEM_LIB $BOOST_
 AM_CONDITIONAL([HAVE_STD_THREAD], [test "$ac_cv_header_features" = "yes"])
 AM_CONDITIONAL([HAVE_X86_64], [test "$build_cpu" = "x86_64"])
 AM_CONDITIONAL([HAVE_LINUX], [test "$build_os" == "linux-gnu"])
+AM_CONDITIONAL([HAVE_WEAK_SYMBOLS], [test "$ac_have_weak_symbols" = "yes"])
+AM_CONDITIONAL([HAVE_BITS_FUNCTEXCEPT], [test "$ac_cv_header_bits_functexcept" = "yes"])
 
 # Output
 AC_CONFIG_FILES([Makefile

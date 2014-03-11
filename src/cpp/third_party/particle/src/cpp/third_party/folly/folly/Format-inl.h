@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #error This file may only be included from Format.h.
 #endif
 
+#include "folly/Exception.h"
 #include "folly/Traits.h"
 
 namespace folly {
@@ -147,8 +148,50 @@ Formatter<containerMode, Args...>::Formatter(StringPiece str, Args&&... args)
 }
 
 template <bool containerMode, class... Args>
+void Formatter<containerMode, Args...>::handleFormatStrError() const {
+  if (crashOnError_) {
+    LOG(FATAL) << "folly::format: bad format string \"" << str_ << "\": " <<
+      folly::exceptionStr(std::current_exception());
+  }
+  throw;
+}
+
+template <bool containerMode, class... Args>
 template <class Output>
 void Formatter<containerMode, Args...>::operator()(Output& out) const {
+  // Catch BadFormatArg and range_error exceptions, and call
+  // handleFormatStrError().
+  //
+  // These exception types indicate a problem with the format string.  Most
+  // format strings are string literals specified by the programmer.  If they
+  // have a problem, this is usually a programmer bug.  We want to crash to
+  // ensure that these are found early on during development.
+  //
+  // BadFormatArg is thrown by the Format.h code, while range_error is thrown
+  // by Conv.h, which is used in several places in our format string
+  // processing.
+  //
+  // (Note: This behavior is slightly dangerous.  If the Output object throws a
+  // BadFormatArg or a range_error, we will also crash the program, even if it
+  // wasn't an issue with the format string.  This seems highly unlikely
+  // though, and none of our current Output objects can throw these errors.)
+  //
+  // We also throw out_of_range errors if the format string references an
+  // argument that isn't present (or a key that isn't present in one of the
+  // argument containers).  However, at the moment we don't crash on these
+  // errors, as it is likely that the container is dynamic at runtime.
+  try {
+    appendOutput(out);
+  } catch (const BadFormatArg& ex) {
+    handleFormatStrError();
+  } catch (const std::range_error& ex) {
+    handleFormatStrError();
+  }
+}
+
+template <bool containerMode, class... Args>
+template <class Output>
+void Formatter<containerMode, Args...>::appendOutput(Output& out) const {
   auto p = str_.begin();
   auto end = str_.end();
 
@@ -168,7 +211,9 @@ void Formatter<containerMode, Args...>::operator()(Output& out) const {
       out(StringPiece(p, q));
       p = q;
 
-      CHECK(p != end && *p == '}') << "single '}' in format string";
+      if (p == end || *p != '}') {
+        throw BadFormatArg("folly::format: single '}' in format string");
+      }
       ++p;
     }
   };
@@ -185,7 +230,9 @@ void Formatter<containerMode, Args...>::operator()(Output& out) const {
     outputString(StringPiece(p, q));
     p = q + 1;
 
-    CHECK(p != end) << "'{' at end of format string";
+    if (p == end) {
+      throw BadFormatArg("folly::format: '}' at end of format string");
+    }
 
     // "{{" -> "{"
     if (*p == '{') {
@@ -196,7 +243,9 @@ void Formatter<containerMode, Args...>::operator()(Output& out) const {
 
     // Format string
     q = static_cast<const char*>(memchr(p, '}', end - p));
-    CHECK(q != end) << "missing ending '}'";
+    if (q == nullptr) {
+      throw BadFormatArg("folly::format: missing ending '}'");
+    }
     FormatArg arg(StringPiece(p, q));
     p = q + 1;
 
@@ -218,19 +267,31 @@ void Formatter<containerMode, Args...>::operator()(Output& out) const {
         try {
           argIndex = to<int>(piece);
         } catch (const std::out_of_range& e) {
-          LOG(FATAL) << "argument index must be integer";
+          arg.error("argument index must be integer");
         }
-        CHECK(argIndex >= 0)
-          << arg.errorStr("argument index must be non-negative");
+        arg.enforce(argIndex >= 0, "argument index must be non-negative");
         hasExplicitArgIndex = true;
       }
     }
 
-    CHECK(!hasDefaultArgIndex || !hasExplicitArgIndex)
-      << "may not have both default and explicit arg indexes";
+    if (hasDefaultArgIndex && hasExplicitArgIndex) {
+      throw BadFormatArg(
+          "folly::format: may not have both default and explicit arg indexes");
+    }
 
     doFormat(argIndex, arg, out);
   }
+}
+
+template <bool containerMode, class... Args>
+void writeTo(FILE* fp, const Formatter<containerMode, Args...>& formatter) {
+  auto writer = [fp] (StringPiece sp) {
+    ssize_t n = fwrite(sp.data(), 1, sp.size(), fp);
+    if (n < sp.size()) {
+      throwSystemError("Formatter writeTo", "fwrite failed");
+    }
+  };
+  formatter(writer);
 }
 
 namespace format_value {
@@ -391,8 +452,8 @@ class FormatValue<
       uval = val_;
       sign = '\0';
 
-      CHECK(arg.sign == FormatArg::Sign::DEFAULT)
-        << arg.errorStr("sign specifications not allowed for unsigned values");
+      arg.enforce(arg.sign == FormatArg::Sign::DEFAULT,
+                  "sign specifications not allowed for unsigned values");
     }
 
     // max of:
@@ -419,9 +480,9 @@ class FormatValue<
     switch (presentation) {
     case 'n':  // TODO(tudorb): locale awareness?
     case 'd':
-      CHECK(!arg.basePrefix)
-        << arg.errorStr("base prefix not allowed with '", presentation,
-                        "' specifier");
+      arg.enforce(!arg.basePrefix,
+                  "base prefix not allowed with '", presentation,
+                  "' specifier");
       if (arg.thousandsSeparator) {
         useSprintf("%'ju");
       } else {
@@ -431,21 +492,21 @@ class FormatValue<
       }
       break;
     case 'c':
-      CHECK(!arg.basePrefix)
-        << arg.errorStr("base prefix not allowed with '", presentation,
-                        "' specifier");
-      CHECK(!arg.thousandsSeparator)
-        << arg.errorStr("thousands separator (',') not allowed with '",
-                        presentation, "' specifier");
+      arg.enforce(!arg.basePrefix,
+                  "base prefix not allowed with '", presentation,
+                  "' specifier");
+      arg.enforce(!arg.thousandsSeparator,
+                  "thousands separator (',') not allowed with '",
+                  presentation, "' specifier");
       valBufBegin = valBuf + 3;
       *valBufBegin = static_cast<char>(uval);
       valBufEnd = valBufBegin + 1;
       break;
     case 'o':
     case 'O':
-      CHECK(!arg.thousandsSeparator)
-        << arg.errorStr("thousands separator (',') not allowed with '",
-                        presentation, "' specifier");
+      arg.enforce(!arg.thousandsSeparator,
+                  "thousands separator (',') not allowed with '",
+                  presentation, "' specifier");
       valBufEnd = valBuf + valBufSize - 1;
       valBufBegin = valBuf + detail::uintToOctal(valBuf, valBufSize - 1, uval);
       if (arg.basePrefix) {
@@ -454,9 +515,9 @@ class FormatValue<
       }
       break;
     case 'x':
-      CHECK(!arg.thousandsSeparator)
-        << arg.errorStr("thousands separator (',') not allowed with '",
-                        presentation, "' specifier");
+      arg.enforce(!arg.thousandsSeparator,
+                  "thousands separator (',') not allowed with '",
+                  presentation, "' specifier");
       valBufEnd = valBuf + valBufSize - 1;
       valBufBegin = valBuf + detail::uintToHexLower(valBuf, valBufSize - 1,
                                                     uval);
@@ -467,9 +528,9 @@ class FormatValue<
       }
       break;
     case 'X':
-      CHECK(!arg.thousandsSeparator)
-        << arg.errorStr("thousands separator (',') not allowed with '",
-                        presentation, "' specifier");
+      arg.enforce(!arg.thousandsSeparator,
+                  "thousands separator (',') not allowed with '",
+                  presentation, "' specifier");
       valBufEnd = valBuf + valBufSize - 1;
       valBufBegin = valBuf + detail::uintToHexUpper(valBuf, valBufSize - 1,
                                                     uval);
@@ -481,9 +542,9 @@ class FormatValue<
       break;
     case 'b':
     case 'B':
-      CHECK(!arg.thousandsSeparator)
-        << arg.errorStr("thousands separator (',') not allowed with '",
-                        presentation, "' specifier");
+      arg.enforce(!arg.thousandsSeparator,
+                  "thousands separator (',') not allowed with '",
+                  presentation, "' specifier");
       valBufEnd = valBuf + valBufSize - 1;
       valBufBegin = valBuf + detail::uintToBinary(valBuf, valBufSize - 1,
                                                   uval);
@@ -494,7 +555,7 @@ class FormatValue<
       }
       break;
     default:
-      LOG(FATAL) << arg.errorStr("invalid specifier '", presentation, "'");
+      arg.error("invalid specifier '", presentation, "'");
     }
 
     if (sign) {
@@ -612,7 +673,7 @@ class FormatValue<double> {
             exponentSymbol,
             -4, arg.precision,
             0, 0);
-        CHECK(conv.ToExponential(val, arg.precision, &builder));
+        arg.enforce(conv.ToExponential(val, arg.precision, &builder));
       }
       break;
     case 'n':  // should be locale-aware, but isn't
@@ -632,11 +693,11 @@ class FormatValue<double> {
             exponentSymbol,
             -4, arg.precision,
             0, 0);
-        CHECK(conv.ToShortest(val, &builder));
+        arg.enforce(conv.ToShortest(val, &builder));
       }
       break;
     default:
-      LOG(FATAL) << arg.errorStr("invalid specifier '", arg.presentation, "'");
+      arg.error("invalid specifier '", arg.presentation, "'");
     }
 
     int len = builder.position();
@@ -693,9 +754,9 @@ class FormatValue<
   void format(FormatArg& arg, FormatCallback& cb) const {
     if (arg.keyEmpty()) {
       arg.validate(FormatArg::Type::OTHER);
-      CHECK(arg.presentation == FormatArg::kDefaultPresentation ||
-            arg.presentation == 's')
-        << arg.errorStr("invalid specifier '", arg.presentation, "'");
+      arg.enforce(arg.presentation == FormatArg::kDefaultPresentation ||
+                  arg.presentation == 's',
+                  "invalid specifier '", arg.presentation, "'");
       format_value::formatString(val_, arg, cb);
     } else {
       FormatValue<char>(val_.at(arg.splitIntKey())).format(arg, cb);
@@ -715,8 +776,8 @@ class FormatValue<std::nullptr_t> {
   template <class FormatCallback>
   void format(FormatArg& arg, FormatCallback& cb) const {
     arg.validate(FormatArg::Type::OTHER);
-    CHECK(arg.presentation == FormatArg::kDefaultPresentation)
-      << arg.errorStr("invalid specifier '", arg.presentation, "'");
+    arg.enforce(arg.presentation == FormatArg::kDefaultPresentation,
+                "invalid specifier '", arg.presentation, "'");
     format_value::formatString("(null)", arg, cb);
   }
 };
@@ -766,8 +827,8 @@ class FormatValue<
     } else {
       // Print as a pointer, in hex.
       arg.validate(FormatArg::Type::OTHER);
-      CHECK(arg.presentation == FormatArg::kDefaultPresentation)
-        << arg.errorStr("invalid specifier '", arg.presentation, "'");
+      arg.enforce(arg.presentation == FormatArg::kDefaultPresentation,
+                  "invalid specifier '", arg.presentation, "'");
       arg.basePrefix = true;
       arg.presentation = 'x';
       if (arg.align == FormatArg::Align::DEFAULT) {
@@ -787,7 +848,7 @@ class TryFormatValue {
  public:
   template <class FormatCallback>
   static void formatOrFail(T& value, FormatArg& arg, FormatCallback& cb) {
-    LOG(FATAL) << arg.errorStr("No formatter available for this type");
+    arg.error("No formatter available for this type");
   }
 };
 
@@ -1028,7 +1089,7 @@ class FormatValue<std::pair<A, B>> {
       FormatValue<typename std::decay<B>::type>(val_.second).format(arg, cb);
       break;
     default:
-      LOG(FATAL) << arg.errorStr("invalid index for pair");
+      arg.error("invalid index for pair");
     }
   }
 
@@ -1046,7 +1107,7 @@ class FormatValue<std::tuple<Args...>> {
   template <class FormatCallback>
   void format(FormatArg& arg, FormatCallback& cb) const {
     int key = arg.splitIntKey();
-    CHECK(key >= 0) << arg.errorStr("tuple index must be non-negative");
+    arg.enforce(key >= 0, "tuple index must be non-negative");
     doFormat(key, arg, cb);
   }
 
@@ -1056,7 +1117,7 @@ class FormatValue<std::tuple<Args...>> {
   template <size_t K, class Callback>
   typename std::enable_if<K == valueCount>::type
   doFormatFrom(size_t i, FormatArg& arg, Callback& cb) const {
-    LOG(FATAL) << arg.errorStr("tuple index out of range, max=", i);
+    arg.enforce("tuple index out of range, max=", i);
   }
 
   template <size_t K, class Callback>
@@ -1100,7 +1161,7 @@ class FormatValue<Formatter<containerMode, Args...>, void> {
  */
 template <class Tgt, bool containerMode, class... Args>
 typename std::enable_if<
-   detail::IsSomeString<Tgt>::value>::type
+   IsSomeString<Tgt>::value>::type
 toAppend(const Formatter<containerMode, Args...>& value, Tgt * result) {
   value.appendTo(*result);
 }

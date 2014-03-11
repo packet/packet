@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,10 @@ namespace folly {
 namespace json {
 namespace {
 
-char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
+char32_t decodeUtf8(
+    const unsigned char*& p,
+    const unsigned char* const e,
+    bool skipOnError) {
   /* The following encodings are valid, except for the 5 and 6 byte
    * combinations:
    * 0xxxxxxx
@@ -41,7 +44,10 @@ char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
    * 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
    */
 
+  auto skip = [&] { ++p; return U'\ufffd'; };
+
   if (p >= e) {
+    if (skipOnError) return skip();
     throw std::runtime_error("folly::decodeUtf8 empty/invalid string");
   }
 
@@ -62,8 +68,8 @@ char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
   uint32_t d = fst;
 
   if ((fst & 0xC0) != 0xC0) {
-    throw std::runtime_error(
-      to<std::string>("folly::decodeUtf8 i=0 d=", d));
+    if (skipOnError) return skip();
+    throw std::runtime_error(to<std::string>("folly::decodeUtf8 i=0 d=", d));
   }
 
   fst <<= 1;
@@ -72,6 +78,7 @@ char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
     unsigned char tmp = p[i];
 
     if ((tmp & 0xC0) != 0x80) {
+      if (skipOnError) return skip();
       throw std::runtime_error(
         to<std::string>("folly::decodeUtf8 i=", i, " tmp=", (uint32_t)tmp));
     }
@@ -84,6 +91,7 @@ char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
 
       // overlong, could have been encoded with i bytes
       if ((d & ~bitMask[i - 1]) == 0) {
+        if (skipOnError) return skip();
         throw std::runtime_error(
           to<std::string>("folly::decodeUtf8 i=", i, " d=", d));
       }
@@ -91,6 +99,7 @@ char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
       // check for surrogates only needed for 3 bytes
       if (i == 2) {
         if ((d >= 0xD800 && d <= 0xDFFF) || d > 0x10FFFF) {
+          if (skipOnError) return skip();
           throw std::runtime_error(
             to<std::string>("folly::decodeUtf8 i=", i, " d=", d));
         }
@@ -101,6 +110,7 @@ char32_t decodeUtf8(const unsigned char*& p, const unsigned char* const e) {
     }
   }
 
+  if (skipOnError) return skip();
   throw std::runtime_error("folly::decodeUtf8 encoding length maxed out");
 }
 
@@ -116,6 +126,11 @@ struct Printer {
   void operator()(dynamic const& v) const {
     switch (v.type()) {
     case dynamic::DOUBLE:
+      if (!opts_.allow_nan_inf &&
+          (std::isnan(v.asDouble()) || std::isinf(v.asDouble()))) {
+        throw std::runtime_error("folly::toJson: JSON object value was a "
+          "NaN or INF");
+      }
       toAppend(v.asDouble(), &out_);
       break;
     case dynamic::INT64: {
@@ -149,7 +164,7 @@ struct Printer {
   }
 
 private:
-  void printKV(const std::pair<dynamic, dynamic>& p) const {
+  void printKV(const std::pair<const dynamic, dynamic>& p) const {
     if (!opts_.allow_non_string_keys && !p.first.isString()) {
       throw std::runtime_error("folly::toJson: JSON object key was not a "
         "string");
@@ -157,6 +172,16 @@ private:
     (*this)(p.first);
     mapColon();
     (*this)(p.second);
+  }
+
+  template <typename Iterator>
+  void printKVPairs(Iterator begin, Iterator end) const {
+    printKV(*begin);
+    for (++begin; begin != end; ++begin) {
+      out_ += ',';
+      newline();
+      printKV(*begin);
+    }
   }
 
   void printObject(dynamic const& o) const {
@@ -168,12 +193,13 @@ private:
     out_ += '{';
     indent();
     newline();
-    auto it = o.items().begin();
-    printKV(*it);
-    for (++it; it != o.items().end(); ++it) {
-      out_ += ',';
-      newline();
-      printKV(*it);
+    if (opts_.sort_keys) {
+      std::vector<std::pair<dynamic, dynamic>> items(
+        o.items().begin(), o.items().end());
+      std::sort(items.begin(), items.end());
+      printKVPairs(items.begin(), items.end());
+    } else {
+      printKVPairs(o.items().begin(), o.items().end());
     }
     outdent();
     newline();
@@ -285,6 +311,15 @@ struct Input {
 
   StringPiece skipDigits() {
     return skipWhile([] (char c) { return c >= '0' && c <= '9'; });
+  }
+
+  StringPiece skipMinusAndDigits() {
+    bool firstChar = true;
+    return skipWhile([&firstChar] (char c) {
+        bool result = (c >= '0' && c <= '9') || (firstChar && c == '-');
+        firstChar = false;
+        return result;
+      });
   }
 
   void skipWhitespace() {
@@ -448,22 +483,19 @@ dynamic parseArray(Input& in) {
 dynamic parseNumber(Input& in) {
   bool const negative = (*in == '-');
   if (negative) {
-    ++in;
-    if (in.consume("Infinity")) {
+    if (in.consume("-Infinity")) {
       return -std::numeric_limits<double>::infinity();
     }
   }
 
-  auto integral = in.skipDigits();
-  if (integral.empty()) {
+  auto integral = in.skipMinusAndDigits();
+  if (negative && integral.size() < 2) {
     in.error("expected digits after `-'");
   }
+
   auto const wasE = *in == 'e' || *in == 'E';
   if (*in != '.' && !wasE) {
     auto val = to<int64_t>(integral);
-    if (negative) {
-      val = -val;
-    }
     in.skipWhitespace();
     return val;
   }
@@ -480,9 +512,6 @@ dynamic parseNumber(Input& in) {
   auto fullNum = makeRange(integral.begin(), end);
 
   auto val = to<double>(fullNum);
-  if (negative) {
-    val *= -1;
-  }
   return val;
 }
 
@@ -631,7 +660,8 @@ void escapeString(StringPiece input,
   while (p < e) {
     // Since non-ascii encoding inherently does utf8 validation
     // we explicitly validate utf8 only if non-ascii encoding is disabled.
-    if (opts.validate_utf8 && !opts.encode_non_ascii) {
+    if ((opts.validate_utf8 || opts.skip_invalid_utf8)
+        && !opts.encode_non_ascii) {
       // to achieve better spatial and temporal coherence
       // we do utf8 validation progressively along with the
       // string-escaping instead of two separate passes
@@ -643,13 +673,18 @@ void escapeString(StringPiece input,
       if (q == p) {
         // calling utf8_decode has the side effect of
         // checking that utf8 encodings are valid
-        decodeUtf8(q, e);
+        char32_t v = decodeUtf8(q, e, opts.skip_invalid_utf8);
+        if (opts.skip_invalid_utf8 && v == U'\ufffd') {
+          out.append("\ufffd");
+          p = q;
+          continue;
+        }
       }
     }
     if (opts.encode_non_ascii && (*p & 0x80)) {
       // note that this if condition captures utf8 chars
       // with value > 127, so size > 1 byte
-      char32_t v = decodeUtf8(p, e);
+      char32_t v = decodeUtf8(p, e, opts.skip_invalid_utf8);
       out.append("\\u");
       out.push_back(hexDigit(v >> 12));
       out.push_back(hexDigit((v >> 8) & 0x0f));
@@ -721,6 +756,7 @@ fbstring toPrettyJson(dynamic const& dyn) {
 void dynamic::print_as_pseudo_json(std::ostream& out) const {
   json::serialization_opts opts;
   opts.allow_non_string_keys = true;
+  opts.allow_nan_inf = true;
   out << json::serialize(*this, opts);
 }
 

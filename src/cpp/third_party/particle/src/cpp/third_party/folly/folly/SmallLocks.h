@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,12 +111,13 @@ struct MicroSpinLock {
    */
   bool cas(uint8_t compare, uint8_t newVal) {
     bool out;
-    asm volatile("lock; cmpxchgb %2, (%3);"
-                 "setz %0;"
-                 : "=r" (out)
+    bool memVal; // only set if the cmpxchg fails
+    asm volatile("lock; cmpxchgb %[newVal], (%[lockPtr]);"
+                 "setz %[output];"
+                 : [output] "=r" (out), "=a" (memVal)
                  : "a" (compare), // cmpxchgb constrains this to be in %al
-                   "q" (newVal),  // Needs to be byte-accessible
-                   "r" (&lock_)
+                   [newVal] "q" (newVal),  // Needs to be byte-accessible
+                   [lockPtr] "r" (&lock_)
                  : "memory", "flags");
     return out;
   }

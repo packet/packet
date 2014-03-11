@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,9 @@ class Optional {
     : hasValue_(false) {
   }
 
-  Optional(const Optional& src) {
+  Optional(const Optional& src)
+    noexcept(std::is_nothrow_copy_constructible<Value>::value) {
+
     if (src.hasValue()) {
       construct(src.value());
     } else {
@@ -99,7 +101,9 @@ class Optional {
     }
   }
 
-  Optional(Optional&& src) {
+  Optional(Optional&& src)
+    noexcept(std::is_nothrow_move_constructible<Value>::value) {
+
     if (src.hasValue()) {
       construct(std::move(src.value()));
       src.clear();
@@ -120,7 +124,7 @@ class Optional {
     construct(newValue);
   }
 
-  ~Optional() {
+  ~Optional() noexcept {
     clear();
   }
 
@@ -167,12 +171,16 @@ class Optional {
     return *this;
   }
 
-  Optional& operator=(Optional &&other) {
+  Optional& operator=(Optional &&other)
+    noexcept (std::is_nothrow_move_assignable<Value>::value) {
+
     assign(std::move(other));
     return *this;
   }
 
-  Optional& operator=(const Optional &other) {
+  Optional& operator=(const Optional &other)
+    noexcept (std::is_nothrow_copy_assignable<Value>::value) {
+
     assign(other);
     return *this;
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,8 +51,8 @@ struct __cxa_eh_globals {
 };
 
 extern "C" {
-__cxa_eh_globals* __cxa_get_globals(void);
-__cxa_eh_globals* __cxa_get_globals_fast(void);
+__cxa_eh_globals* __cxa_get_globals(void) noexcept;
+__cxa_eh_globals* __cxa_get_globals_fast(void) noexcept;
 }
 
 }  // namespace __cxxabiv1

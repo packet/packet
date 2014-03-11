@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,18 @@
 #include <string>
 #include <boost/type_traits.hpp>
 
-#ifdef __GNUC__
-# include <ext/hash_set>
-# include <ext/hash_map>
+#ifdef _GLIBCXX_SYMVER
+#include <ext/hash_set>
+#include <ext/hash_map>
 #endif
+
+#include <unordered_set>
+#include <unordered_map>
 
 #include "folly/Conv.h"
 #include "folly/FBString.h"
 #include "folly/FBVector.h"
+#include "folly/Portability.h"
 #include "folly/Range.h"
 #include "folly/ScopeGuard.h"
 
@@ -322,11 +326,34 @@ fbstring errnoStr(int err);
  *
  * Use for debugging -- do not rely on demangle() returning anything useful.
  *
- * This function may allocate memory (and therefore throw).
+ * This function may allocate memory (and therefore throw std::bad_alloc).
  */
 fbstring demangle(const char* name);
 inline fbstring demangle(const std::type_info& type) {
   return demangle(type.name());
+}
+
+/**
+ * Return the demangled (prettyfied) version of a C++ type in a user-provided
+ * buffer.
+ *
+ * The semantics are the same as for snprintf or strlcpy: bufSize is the size
+ * of the buffer, the string is always null-terminated, and the return value is
+ * the number of characters (not including the null terminator) that would have
+ * been written if the buffer was big enough. (So a return value >= bufSize
+ * indicates that the output was truncated)
+ *
+ * This function does not allocate memory and is async-signal-safe.
+ *
+ * Note that the underlying function for the fbstring-returning demangle is
+ * somewhat standard (abi::__cxa_demangle, which uses malloc), the underlying
+ * function for this version is less so (cplus_demangle_v3_callback from
+ * libiberty), so it is possible for the fbstring version to work, while this
+ * version returns the original, mangled name.
+ */
+size_t demangle(const char* name, char* buf, size_t bufSize);
+inline size_t demangle(const std::type_info& type, char* buf, size_t bufSize) {
+  return demangle(type.name(), buf, bufSize);
 }
 
 /**
@@ -468,16 +495,11 @@ std::string join(const Delim& delimiter,
 
 } // namespace folly
 
-// Hash functions for string and fbstring usable with e.g. hash_map
-#ifdef __GNUC__
-namespace __gnu_cxx {
-
-template <class C>
-struct hash<folly::basic_fbstring<C> > : private hash<const C*> {
-  size_t operator()(const folly::basic_fbstring<C> & s) const {
-    return hash<const C*>::operator()(s.c_str());
-  }
-};
+// Hash functions to make std::string usable with e.g. hash_map
+//
+// Handle interaction with different C++ standard libraries, which
+// expect these types to be in different namespaces.
+namespace std {
 
 template <class C>
 struct hash<std::basic_string<C> > : private hash<const C*> {
@@ -486,7 +508,19 @@ struct hash<std::basic_string<C> > : private hash<const C*> {
   }
 };
 
-} // namespace __gnu_cxx
+}
+
+#if defined(_GLIBCXX_SYMVER) && !defined(__BIONIC__)
+namespace __gnu_cxx {
+
+template <class C>
+struct hash<std::basic_string<C> > : private hash<const C*> {
+  size_t operator()(const std::basic_string<C> & s) const {
+    return hash<const C*>::operator()(s.c_str());
+  }
+};
+
+}
 #endif
 
 // Hook into boost's type traits

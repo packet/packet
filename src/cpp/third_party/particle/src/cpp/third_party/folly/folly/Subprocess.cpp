@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,12 @@
 
 #include "folly/Subprocess.h"
 
+#if __linux__
 #include <sys/prctl.h>
+#endif
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
-#include <wait.h>
 
 #include <array>
 #include <algorithm>
@@ -362,7 +363,7 @@ void Subprocess::spawnInternal(
   //
   // The parent also unblocks all signals as soon as vfork() returns.
   sigset_t allBlocked;
-  r = ::sigfillset(&allBlocked);
+  r = sigfillset(&allBlocked);
   checkUnixError(r, "sigfillset");
   sigset_t oldSignals;
 
@@ -445,6 +446,7 @@ int Subprocess::prepareChild(const Options& options,
     }
   }
 
+#if __linux__
   // Opt to receive signal on parent death, if requested
   if (options.parentDeathSignal_ != 0) {
     r = prctl(PR_SET_PDEATHSIG, options.parentDeathSignal_, 0, 0, 0);
@@ -452,6 +454,7 @@ int Subprocess::prepareChild(const Options& options,
       return errno;
     }
   }
+#endif
 
   return 0;
 }

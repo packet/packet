@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 #include <list>
 #include <fstream>
+#include <iomanip>
 #include <boost/algorithm/string.hpp>
 #include <boost/random.hpp>
 #include <gtest/gtest.h>
@@ -526,10 +527,11 @@ template <class String> void clause11_21_4_6_6(String & test) {
                random(0, maxString), random('a', 'z'));
   pos = random(0, test.size());
   if (avoidAliasing) {
+    auto newString = String(test);
     test.replace(
       test.begin() + pos,
       test.begin() + pos + random(0, test.size() - pos),
-      String(test));
+      newString);
   } else {
     test.replace(
       test.begin() + pos,
@@ -538,10 +540,11 @@ template <class String> void clause11_21_4_6_6(String & test) {
   }
   pos = random(0, test.size());
   if (avoidAliasing) {
+    auto newString = String(test);
     test.replace(
       test.begin() + pos,
       test.begin() + pos + random(0, test.size() - pos),
-      String(test).c_str(),
+      newString.c_str(),
       test.size() - random(0, test.size()));
   } else {
     test.replace(
@@ -1177,6 +1180,48 @@ TEST(FBString, noexcept) {
   EXPECT_FALSE(noexcept(y = x));
   EXPECT_TRUE(noexcept(y = std::move(x)));
 #endif
+}
+
+TEST(FBString, iomanip) {
+  stringstream ss;
+  fbstring fbstr("Hello");
+
+  ss << setw(6) << fbstr;
+  EXPECT_EQ(ss.str(), " Hello");
+  ss.str("");
+
+  ss << left << setw(6) << fbstr;
+  EXPECT_EQ(ss.str(), "Hello ");
+  ss.str("");
+
+  ss << right << setw(6) << fbstr;
+  EXPECT_EQ(ss.str(), " Hello");
+  ss.str("");
+
+  ss << setw(4) << fbstr;
+  EXPECT_EQ(ss.str(), "Hello");
+  ss.str("");
+
+  ss << setfill('^') << setw(6) << fbstr;
+  EXPECT_EQ(ss.str(), "^Hello");
+  ss.str("");
+}
+
+TEST(FBString, rvalueIterators) {
+  // you cannot take &* of a move-iterator, so use that for testing
+  fbstring s = "base";
+  fbstring r = "hello";
+  r.replace(r.begin(), r.end(),
+      make_move_iterator(s.begin()), make_move_iterator(s.end()));
+  EXPECT_EQ("base", r);
+
+  // The following test is probably not required by the standard.
+  // i.e. this could be in the realm of undefined behavior.
+  fbstring b = "123abcXYZ";
+  auto ait = b.begin() + 3;
+  auto Xit = b.begin() + 6;
+  b.replace(ait, b.end(), b.begin(), Xit);
+  EXPECT_EQ("123123abc", b); // if things go wrong, you'd get "123123123"
 }
 
 int main(int argc, char** argv) {

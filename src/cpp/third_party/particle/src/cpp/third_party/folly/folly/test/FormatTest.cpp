@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "folly/FBVector.h"
+#include "folly/FileUtil.h"
 #include "folly/dynamic.h"
 #include "folly/json.h"
 
@@ -34,6 +35,16 @@ std::string fstr(StringPiece fmt, Args&&... args) {
 template <class C>
 std::string vstr(StringPiece fmt, const C& c) {
   return vformat(fmt, c).str();
+}
+
+template <class... Args>
+std::string fstrChecked(StringPiece fmt, Args&&... args) {
+  return formatChecked(fmt, std::forward<Args>(args)...).str();
+}
+
+template <class C>
+std::string vstrChecked(StringPiece fmt, const C& c) {
+  return vformatChecked(fmt, c).str();
 }
 
 template <class Uint>
@@ -184,6 +195,26 @@ TEST(Format, Simple) {
   format(&s, "{} {}", 42, 23);
   format(&s, " hello {:X<7}", "world");
   EXPECT_EQ("42 23 hello worldXX", s);
+
+  // Test writing to FILE. I'd use open_memstream but that's not available
+  // outside of Linux (even though it's in POSIX.1-2008).
+  {
+    int fds[2];
+    CHECK_ERR(pipe(fds));
+    SCOPE_EXIT { closeNoInt(fds[1]); };
+    {
+      FILE* fp = fdopen(fds[1], "wb");
+      PCHECK(fp);
+      SCOPE_EXIT { fclose(fp); };
+      writeTo(fp, format("{} {}", 42, 23));  // <= 512 bytes (PIPE_BUF)
+    }
+
+    char buf[512];
+    ssize_t n = readFull(fds[0], buf, sizeof(buf));
+    CHECK_GE(n, 0);
+
+    EXPECT_EQ("42 23", std::string(buf, n));
+  }
 }
 
 TEST(Format, Float) {
@@ -275,6 +306,21 @@ TEST(Format, Custom) {
   EXPECT_NE("", fstr("{}", &kv));
 }
 
+namespace {
+
+struct Opaque {
+  int k;
+};
+
+} // namespace
+
+TEST(Format, Unformatted) {
+  Opaque o;
+  EXPECT_NE("", fstr("{}", &o));
+  EXPECT_DEATH(fstr("{0[0]}", &o), "No formatter available for this type");
+  EXPECT_THROW(fstrChecked("{0[0]}", &o), std::invalid_argument);
+}
+
 TEST(Format, Nested) {
   EXPECT_EQ("1 2 3 4", fstr("{} {} {}", 1, 2, format("{} {}", 3, 4)));
   //
@@ -287,10 +333,39 @@ TEST(Format, OutOfBounds) {
   std::vector<int> ints{1, 2, 3, 4, 5};
   EXPECT_EQ("1 3 5", fstr("{0[0]} {0[2]} {0[4]}", ints));
   EXPECT_THROW(fstr("{[5]}", ints), std::out_of_range);
+  EXPECT_THROW(fstrChecked("{[5]}", ints), std::out_of_range);
 
   std::map<std::string, int> map{{"hello", 0}, {"world", 1}};
   EXPECT_EQ("hello = 0", fstr("hello = {[hello]}", map));
   EXPECT_THROW(fstr("{[nope]}", map), std::out_of_range);
+  EXPECT_THROW(vstr("{nope}", map), std::out_of_range);
+  EXPECT_THROW(vstrChecked("{nope}", map), std::out_of_range);
+}
+
+TEST(Format, BogusFormatString) {
+  // format() will crash the program if the format string is invalid.
+  EXPECT_DEATH(fstr("}"), "single '}' in format string");
+  EXPECT_DEATH(fstr("foo}bar"), "single '}' in format string");
+  EXPECT_DEATH(fstr("foo{bar"), "missing ending '}'");
+  EXPECT_DEATH(fstr("{[test]"), "missing ending '}'");
+  EXPECT_DEATH(fstr("{-1.3}"), "argument index must be non-negative");
+  EXPECT_DEATH(fstr("{1.3}", 0, 1, 2), "index not allowed");
+  EXPECT_DEATH(fstr("{0} {} {1}", 0, 1, 2),
+               "may not have both default and explicit arg indexes");
+
+  // formatChecked() should throw exceptions rather than crashing the program
+  EXPECT_THROW(fstrChecked("}"), std::invalid_argument);
+  EXPECT_THROW(fstrChecked("foo}bar"), std::invalid_argument);
+  EXPECT_THROW(fstrChecked("foo{bar"), std::invalid_argument);
+  EXPECT_THROW(fstrChecked("{[test]"), std::invalid_argument);
+  EXPECT_THROW(fstrChecked("{-1.3}"), std::invalid_argument);
+  EXPECT_THROW(fstrChecked("{1.3}", 0, 1, 2), std::invalid_argument);
+  EXPECT_THROW(fstrChecked("{0} {} {1}", 0, 1, 2), std::invalid_argument);
+
+  // This one fails in detail::enforceWhitespace(), which throws
+  // std::range_error
+  EXPECT_DEATH(fstr("{0[test}"), "Non-whitespace: \\[");
+  EXPECT_THROW(fstrChecked("{0[test}"), std::exception);
 }
 
 int main(int argc, char *argv[]) {

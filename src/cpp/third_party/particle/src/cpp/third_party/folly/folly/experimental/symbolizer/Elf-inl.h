@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,8 +62,8 @@ const char* ElfFile::iterateStrings(const ElfW(Shdr)& stringTable, Fn fn)
 template <class Fn>
 const ElfW(Sym)* ElfFile::iterateSymbols(const ElfW(Shdr)& section, Fn fn)
   const {
-  enforce(section.sh_entsize == sizeof(ElfW(Sym)),
-          "invalid entry size in symbol table");
+  FOLLY_SAFE_CHECK(section.sh_entsize == sizeof(ElfW(Sym)),
+                   "invalid entry size in symbol table");
 
   const ElfW(Sym)* sym = &at<ElfW(Sym)>(section.sh_offset);
   const ElfW(Sym)* end = sym + (section.sh_size / section.sh_entsize);

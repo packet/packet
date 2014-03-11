@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 // includes and uses fbstring.
 #if defined(_GLIBCXX_USE_FB) && !defined(_LIBSTDCXX_FBSTRING)
 
+#include "folly/detail/Malloc.h"
+
 #include <string>
 namespace folly {
   using std::goodMallocSize;
@@ -41,8 +43,21 @@ namespace folly {
 
 #ifdef _LIBSTDCXX_FBSTRING
 #pragma GCC system_header
+
+/**
+ * Declare rallocm() and allocm() as weak symbols. These will be provided by
+ * jemalloc if we are using jemalloc, or will be NULL if we are using another
+ * malloc implementation.
+ */
+extern "C" int rallocm(void**, size_t*, size_t, size_t, int)
+__attribute__((weak));
+extern "C" int allocm(void**, size_t*, size_t, int)
+__attribute__((weak));
+
+#include <bits/functexcept.h>
 #define FOLLY_HAVE_MALLOC_H 1
 #else
+#include "folly/detail/Malloc.h"
 #include "folly/Portability.h"
 #endif
 
@@ -61,8 +76,6 @@ namespace folly {
 #include <cstring>
 
 #include <new>
-
-#include <bits/functexcept.h>
 
 /**
  * Define various ALLOCM_* macros normally provided by jemalloc.  We define
@@ -86,16 +99,6 @@ namespace folly {
 #endif
 
 #endif /* ALLOCM_SUCCESS */
-
-/**
- * Declare rallocm() and malloc_usable_size() as weak symbols.  It
- * will be provided by jemalloc if we are using jemalloc, or it will
- * be NULL if we are using another malloc implementation.
- */
-extern "C" int rallocm(void**, size_t*, size_t, size_t, int)
-__attribute__((weak));
-extern "C" int allocm(void**, size_t*, size_t, int)
-__attribute__((weak));
 
 #ifdef _LIBSTDCXX_FBSTRING
 namespace std _GLIBCXX_VISIBILITY(default) {

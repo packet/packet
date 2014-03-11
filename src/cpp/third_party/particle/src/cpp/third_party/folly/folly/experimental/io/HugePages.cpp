@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,9 @@
 #include "folly/ScopeGuard.h"
 #include "folly/String.h"
 
-#include "folly/experimental/Gen.h"
-#include "folly/experimental/FileGen.h"
-#include "folly/experimental/StringGen.h"
+#include "folly/gen/Base.h"
+#include "folly/gen/File.h"
+#include "folly/gen/String.h"
 
 #ifndef MAP_POPULATE
 #define MAP_POPULATE 0
@@ -360,4 +360,3 @@ HugePages::File HugePages::create(ByteRange data,
 }
 
 }  // namespace folly
-

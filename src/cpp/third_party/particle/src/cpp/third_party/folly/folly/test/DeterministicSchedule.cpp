@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,14 @@ DeterministicSchedule::afterSharedAccess() {
   sem_post(sched->sems_[sched->scheduler_(sched->sems_.size())]);
 }
 
+int
+DeterministicSchedule::getRandNumber(int n) {
+  if (tls_sched) {
+    return tls_sched->scheduler_(n);
+  }
+  return std::rand() % n;
+}
+
 sem_t*
 DeterministicSchedule::beforeThreadCreate() {
   sem_t* s = new sem_t;
@@ -247,6 +255,49 @@ bool Futex<DeterministicAtomic>::futexWait(uint32_t expected,
   return rv;
 }
 
+FutexResult futexWaitUntilImpl(Futex<DeterministicAtomic>* futex,
+                               uint32_t expected, uint32_t waitMask) {
+  if (futex == nullptr) {
+    return FutexResult::VALUE_CHANGED;
+  }
+
+  bool rv = false;
+  int futexErrno = 0;
+
+  DeterministicSchedule::beforeSharedAccess();
+  futexLock.lock();
+  if (futex->data == expected) {
+    auto& queue = futexQueues[futex];
+    queue.push_back(std::make_pair(waitMask, &rv));
+    auto ours = queue.end();
+    ours--;
+    while (!rv) {
+      futexLock.unlock();
+      DeterministicSchedule::afterSharedAccess();
+      DeterministicSchedule::beforeSharedAccess();
+      futexLock.lock();
+
+      // Simulate spurious wake-ups, timeouts each time with
+      // a 10% probability
+      if (DeterministicSchedule::getRandNumber(100) < 10) {
+        queue.erase(ours);
+        if (queue.empty()) {
+          futexQueues.erase(futex);
+        }
+        rv = false;
+        // Simulate ETIMEDOUT 90% of the time and other failures
+        // remaining time
+        futexErrno =
+          DeterministicSchedule::getRandNumber(100) >= 10 ? ETIMEDOUT : EINTR;
+        break;
+      }
+    }
+  }
+  futexLock.unlock();
+  DeterministicSchedule::afterSharedAccess();
+  return futexErrnoToFutexResult(rv ? 0 : -1, futexErrno);
+}
+
 template<>
 int Futex<DeterministicAtomic>::futexWake(int count, uint32_t wakeMask) {
   int rv = 0;
@@ -270,6 +321,41 @@ int Futex<DeterministicAtomic>::futexWake(int count, uint32_t wakeMask) {
   futexLock.unlock();
   DeterministicSchedule::afterSharedAccess();
   return rv;
+}
+
+
+template<>
+CacheLocality const& CacheLocality::system<test::DeterministicAtomic>() {
+  static CacheLocality cache(CacheLocality::uniform(16));
+  return cache;
+}
+
+template<>
+test::DeterministicAtomic<size_t>
+    SequentialThreadId<test::DeterministicAtomic>::prevId(0);
+
+template<>
+__thread size_t SequentialThreadId<test::DeterministicAtomic>::currentId(0);
+
+template<>
+const AccessSpreader<test::DeterministicAtomic>
+AccessSpreader<test::DeterministicAtomic>::stripeByCore(
+    CacheLocality::system<>().numCachesByLevel.front());
+
+template<>
+const AccessSpreader<test::DeterministicAtomic>
+AccessSpreader<test::DeterministicAtomic>::stripeByChip(
+    CacheLocality::system<>().numCachesByLevel.back());
+
+template<>
+AccessSpreaderArray<test::DeterministicAtomic,128>
+AccessSpreaderArray<test::DeterministicAtomic,128>::sharedInstance = {};
+
+
+template<>
+Getcpu::Func
+AccessSpreader<test::DeterministicAtomic>::pickGetcpuFunc(size_t numStripes) {
+  return &SequentialThreadId<test::DeterministicAtomic>::getcpu;
 }
 
 }}

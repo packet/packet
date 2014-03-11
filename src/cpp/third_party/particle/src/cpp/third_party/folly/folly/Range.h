@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,18 @@
 #include <stdexcept>
 #include <type_traits>
 #include <boost/operators.hpp>
+
+// libc++ doesn't provide this header
+#if !FOLLY_USE_LIBCPP
+// This file appears in two locations: inside fbcode and in the
+// libstdc++ source code (when embedding fbstring as std::string).
+// To aid in this schizophrenic use, two macros are defined in
+// c++config.h:
+//   _LIBSTDCXX_FBSTRING - Set inside libstdc++.  This is useful to
+//      gate use inside fbcode v. libstdc++
 #include <bits/c++config.h>
+#endif
+
 #include "folly/CpuId.h"
 #include "folly/Traits.h"
 #include "folly/Likely.h"
@@ -229,18 +240,57 @@ public:
   // direction.
   template <class OtherIter, typename std::enable_if<
       (std::is_same<Iter, const unsigned char*>::value &&
-       std::is_same<OtherIter, const char*>::value), int>::type = 0>
+       (std::is_same<OtherIter, const char*>::value ||
+        std::is_same<OtherIter, char*>::value)), int>::type = 0>
   /* implicit */ Range(const Range<OtherIter>& other)
     : b_(reinterpret_cast<const unsigned char*>(other.begin())),
       e_(reinterpret_cast<const unsigned char*>(other.end())) {
   }
 
   template <class OtherIter, typename std::enable_if<
+      (std::is_same<Iter, unsigned char*>::value &&
+       std::is_same<OtherIter, char*>::value), int>::type = 0>
+  /* implicit */ Range(const Range<OtherIter>& other)
+    : b_(reinterpret_cast<unsigned char*>(other.begin())),
+      e_(reinterpret_cast<unsigned char*>(other.end())) {
+  }
+
+  template <class OtherIter, typename std::enable_if<
       (std::is_same<Iter, const char*>::value &&
-       std::is_same<OtherIter, const unsigned char*>::value), int>::type = 0>
+       (std::is_same<OtherIter, const unsigned char*>::value ||
+        std::is_same<OtherIter, unsigned char*>::value)), int>::type = 0>
   explicit Range(const Range<OtherIter>& other)
     : b_(reinterpret_cast<const char*>(other.begin())),
       e_(reinterpret_cast<const char*>(other.end())) {
+  }
+
+  template <class OtherIter, typename std::enable_if<
+      (std::is_same<Iter, char*>::value &&
+       std::is_same<OtherIter, unsigned char*>::value), int>::type = 0>
+  explicit Range(const Range<OtherIter>& other)
+    : b_(reinterpret_cast<char*>(other.begin())),
+      e_(reinterpret_cast<char*>(other.end())) {
+  }
+
+  // Allow implicit conversion from Range<From> to Range<To> if From is
+  // implicitly convertible to To.
+  template <class OtherIter, typename std::enable_if<
+     (!std::is_same<Iter, OtherIter>::value &&
+      std::is_convertible<OtherIter, Iter>::value), int>::type = 0>
+  /* implicit */ Range(const Range<OtherIter>& other)
+    : b_(other.begin()),
+      e_(other.end()) {
+  }
+
+  // Allow explicit conversion from Range<From> to Range<To> if From is
+  // explicitly convertible to To.
+  template <class OtherIter, typename std::enable_if<
+    (!std::is_same<Iter, OtherIter>::value &&
+     !std::is_convertible<OtherIter, Iter>::value &&
+     std::is_constructible<Iter, const OtherIter&>::value), int>::type = 0>
+  explicit Range(const Range<OtherIter>& other)
+    : b_(other.begin()),
+      e_(other.end()) {
   }
 
   void clear() {
@@ -312,12 +362,12 @@ public:
   }
 
   value_type& operator[](size_t i) {
-    CHECK_GT(size(), i);
+    DCHECK_GT(size(), i);
     return b_[i];
   }
 
   const value_type& operator[](size_t i) const {
-    CHECK_GT(size(), i);
+    DCHECK_GT(size(), i);
     return b_[i];
   }
 
@@ -455,6 +505,135 @@ public:
     std::swap(e_, rhs.e_);
   }
 
+  /**
+   * Does this Range start with another range?
+   */
+  bool startsWith(const Range& other) const {
+    return size() >= other.size() && subpiece(0, other.size()) == other;
+  }
+  bool startsWith(value_type c) const {
+    return !empty() && front() == c;
+  }
+
+  /**
+   * Does this Range end with another range?
+   */
+  bool endsWith(const Range& other) const {
+    return size() >= other.size() && subpiece(size() - other.size()) == other;
+  }
+  bool endsWith(value_type c) const {
+    return !empty() && back() == c;
+  }
+
+  /**
+   * Remove the given prefix and return true if the range starts with the given
+   * prefix; return false otherwise.
+   */
+  bool removePrefix(const Range& prefix) {
+    return startsWith(prefix) && (b_ += prefix.size(), true);
+  }
+  bool removePrefix(value_type prefix) {
+    return startsWith(prefix) && (++b_, true);
+  }
+
+  /**
+   * Remove the given suffix and return true if the range ends with the given
+   * suffix; return false otherwise.
+   */
+  bool removeSuffix(const Range& suffix) {
+    return endsWith(suffix) && (e_ -= suffix.size(), true);
+  }
+  bool removeSuffix(value_type suffix) {
+    return endsWith(suffix) && (--e_, true);
+  }
+
+  /**
+   * Splits this `Range` `[b, e)` in the position `i` dictated by the next
+   * occurence of `delimiter`.
+   *
+   * Returns a new `Range` `[b, i)` and adjusts this range to start right after
+   * the delimiter's position. This range will be empty if the delimiter is not
+   * found. If called on an empty `Range`, both this and the returned `Range`
+   * will be empty.
+   *
+   * Example:
+   *
+   *  folly::StringPiece s("sample string for split_next");
+   *  auto p = s.split_step(' ');
+   *
+   *  // prints "sample"
+   *  cout << s << endl;
+   *
+   *  // prints "string for split_next"
+   *  cout << p << endl;
+   *
+   * Example 2:
+   *
+   *  void tokenize(StringPiece s, char delimiter) {
+   *    while (!s.empty()) {
+   *      cout << s.split_step(delimiter);
+   *    }
+   *  }
+   *
+   * @author: Marcelo Juchem <marcelo@fb.com>
+   */
+  Range split_step(value_type delimiter) {
+    auto i = std::find(b_, e_, delimiter);
+    Range result(b_, i);
+
+    b_ = i == e_ ? e_ : std::next(i);
+
+    return result;
+  }
+
+  Range split_step(Range delimiter) {
+    auto i = find(delimiter);
+    Range result(b_, i == std::string::npos ? size() : i);
+
+    b_ = result.end() == e_ ? e_ : std::next(result.end(), delimiter.size());
+
+    return result;
+  }
+
+  /**
+   * Convenience method that calls `split_step()` and passes the result to a
+   * functor, returning whatever the functor does.
+   *
+   * Say you have a functor with this signature:
+   *
+   *  Foo fn(Range r) { }
+   *
+   * `split_step()`'s return type will be `Foo`. It works just like:
+   *
+   *  auto result = fn(myRange.split_step(' '));
+   *
+   * A functor returning `void` is also supported.
+   *
+   * Example:
+   *
+   *  void do_some_parsing(folly::StringPiece s) {
+   *    auto version = s.split_step(' ', [&](folly::StringPiece x) {
+   *      if (x.empty()) {
+   *        throw std::invalid_argument("empty string");
+   *      }
+   *      return std::strtoull(x.begin(), x.end(), 16);
+   *    });
+   *
+   *    // ...
+   *  }
+   *
+   * @author: Marcelo Juchem <marcelo@fb.com>
+   */
+  template <typename TProcess>
+  auto split_step(value_type delimiter, TProcess &&process)
+    -> decltype(process(std::declval<Range>()))
+  { return process(split_step(delimiter)); }
+
+  template <typename TProcess>
+  auto split_step(Range delimiter, TProcess &&process)
+    -> decltype(process(std::declval<Range>()))
+  { return process(split_step(delimiter)); }
+
 private:
   Iter b_, e_;
 };
@@ -476,7 +655,9 @@ Range<Iter> makeRange(Iter first, Iter last) {
 }
 
 typedef Range<const char*> StringPiece;
+typedef Range<char*> MutableStringPiece;
 typedef Range<const unsigned char*> ByteRange;
+typedef Range<unsigned char*> MutableByteRange;
 
 std::ostream& operator<<(std::ostream& os, const StringPiece& piece);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +89,12 @@ TEST(File, OwnsFd) {
   expectOK(r);
   EXPECT_EQ(0, r);
   ::close(p[0]);
+}
+
+TEST(File, Release) {
+  File in(STDOUT_FILENO, false);
+  CHECK_EQ(STDOUT_FILENO, in.release());
+  CHECK_EQ(-1, in.release());
 }
 
 #define EXPECT_CONTAINS(haystack, needle) \

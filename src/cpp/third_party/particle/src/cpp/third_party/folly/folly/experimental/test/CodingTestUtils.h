@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,27 +66,6 @@ std::vector<uint32_t> loadList(const std::string& filename) {
     result.push_back(id);
   }
   return result;
-}
-
-template <class Reader, class List>
-void testEmpty() {
-  List list;
-  const typename List::ValueType* const data = nullptr;
-  List::encode(data, 0, list);
-  {
-    Reader reader(list);
-    EXPECT_FALSE(reader.next());
-    EXPECT_EQ(reader.size(), 0);
-  }
-  {
-    Reader reader(list);
-    EXPECT_FALSE(reader.skip(1));
-    EXPECT_FALSE(reader.skip(10));
-  }
-  {
-    Reader reader(list);
-    EXPECT_FALSE(reader.skipTo(1));
-  }
 }
 
 template <class Reader, class List>
@@ -169,10 +148,31 @@ void testSkipTo(const std::vector<uint32_t>& data, const List& list) {
   }
 }
 
-template <class Reader, class List>
+template <class Reader, class Encoder>
+void testEmpty() {
+  typename Encoder::CompressedList list;
+  const typename Encoder::ValueType* const data = nullptr;
+  Encoder::encode(data, 0, list);
+  {
+    Reader reader(list);
+    EXPECT_FALSE(reader.next());
+    EXPECT_EQ(reader.size(), 0);
+  }
+  {
+    Reader reader(list);
+    EXPECT_FALSE(reader.skip(1));
+    EXPECT_FALSE(reader.skip(10));
+  }
+  {
+    Reader reader(list);
+    EXPECT_FALSE(reader.skipTo(1));
+  }
+}
+
+template <class Reader, class Encoder>
 void testAll(const std::vector<uint32_t>& data) {
-  List list;
-  List::encode(data.begin(), data.end(), list);
+  typename Encoder::CompressedList list;
+  Encoder::encode(data.begin(), data.end(), list);
   testNext<Reader>(data, list);
   testSkip<Reader>(data, list);
   testSkipTo<Reader>(data, list);

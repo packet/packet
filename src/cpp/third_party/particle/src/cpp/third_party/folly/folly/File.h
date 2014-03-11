@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,15 +38,12 @@ class File {
    * Create a File object from an existing file descriptor.
    * Takes ownership of the file descriptor if ownsFd is true.
    */
-  /* implicit */ File(int fd,
-                      bool ownsFd = false);
+  explicit File(int fd, bool ownsFd = false);
 
   /**
    * Open and create a file object.  Throws on error.
    */
-  /* implicit */ File(const char* name,
-                      int flags = O_RDONLY,
-                      mode_t mode = 0644);
+  explicit File(const char* name, int flags = O_RDONLY, mode_t mode = 0644);
 
   ~File();
 
@@ -64,7 +61,7 @@ class File {
    * Returns 'true' iff the file was successfully opened.
    */
   explicit operator bool() const {
-    return fd_ >= 0;
+    return fd_ != -1;
   }
 
   /**
@@ -85,9 +82,10 @@ class File {
   bool closeNoThrow();
 
   /**
-   * Releases the file descriptor; no longer owned by this File.
+   * Returns and releases the file descriptor; no longer owned by this File.
+   * Returns -1 if the File object didn't wrap a file.
    */
-  void release();
+  int release();
 
   /**
    * Swap this File with another.
