@@ -40,6 +40,7 @@
           '<(folly_home)',
         ],
       },
+      'defines': ['_GLIBCXX_PERMIT_BACKWARD_HASH'],
       'sources': [
         '<(folly_src_home)/ApplyTuple.h',
         '<(folly_src_home)/Arena.h',
