@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <ios>
 #include <memory>
 #include <string>
@@ -152,16 +153,13 @@ class Channel {
       : io_vector(nullptr),
         written(0),
         consumed(0),
-        stream(),
         close_async(new uv_async_t()),
         write_async(new uv_async_t()),
         packet_factory(packet_factory),
         out_buffer(out_buf_size),
-        read_handler(),
-        close_handler(),
-        ref_count(1),
         closed(false),
-        write_async_sent(false) {
+        write_async_sent(false),
+        ref_count(1) {
     stream.data = this;
     uv_tcp_init(loop, &stream);
 
@@ -252,13 +250,13 @@ class Channel {
       if (consumed == 0) {
         break;
       }
-
-      this->write_packets(IOV_MAX);
     } while (true);
+
+    this->write_packets(IOV_MAX);
   }
 
   void write_packets(size_t threshold = 0) {
-    auto size = out_buffer.guess_size();
+    auto size = out_buffer.guess_size() + out_vectors.size();
     while (size > threshold) {
       auto written = write_a_batch(size);
       if (!written) {
@@ -278,61 +276,134 @@ class Channel {
       return 0;
     }
 
-    size_t buffer_size = std::min((size_t) IOV_MAX, batch_size);
-
-    using Vectors = std::vector<SharedIoVector>;
-    auto vectors = new Vectors();
-    vectors->reserve(buffer_size);
-
-    uv_buf_t bufs[IOV_MAX];
-
-    WriteReq req;
-    particle::CpuId last_cpu_id = 0;
-
-    size_t consumed = 0;
-    while (buffer_size--) {
-      if (!out_buffer.try_read(&req, &last_cpu_id)) {
-        continue;
-      }
-
-      bufs[consumed] = std::move(req.buf);
-      vectors->push_back(std::move(req.vec));
-      ++consumed;
-    }
-
-    if (consumed == 0) {
-      delete vectors;
+    if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream))) {
+      LOG(ERROR) << "Cannot write on a closing stream.";
       return 0;
     }
 
-    auto channel_after_write_cb = [](uv_write_t* req, int status) {
-      if (status == UV_ECANCELED) {
-        LOG(ERROR) << "Write cancelled";
+    if (batch_size > IOV_MAX) {
+      batch_size = IOV_MAX;
+    }
+
+    if (out_vectors.size() < batch_size) {
+      size_t buffer_size = batch_size - out_vectors.size();
+
+      WriteReq req;
+      particle::CpuId last_cpu_id = 0;
+
+      while (buffer_size--) {
+        if (!out_buffer.try_read(&req, &last_cpu_id)) {
+          continue;
+        }
+
+        out_uv_bufs[out_vectors.size()] = std::move(req.buf);
+        out_vectors.push_back(std::move(req.vec));
       }
+    }
 
-      if (status < 0) {
-        LOG(ERROR) << "Error in write";
-      }
+    if (unlikely(out_vectors.empty())) {
+      return 0;
+    }
 
+    // maybe_merge_uv_bufs();
 
-      auto vectors = static_cast<Vectors*>(req->data);
-      delete vectors;
-      delete req;
-    };
+    int written = uv_try_write(reinterpret_cast<uv_stream_t*>(&stream),
+                               out_uv_bufs, out_vectors.size());
 
-    uv_write_t* write_req = new uv_write_t();
-    write_req->data = static_cast<void*>(vectors);
-
-    if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)) ||
-        uv_write(write_req, reinterpret_cast<uv_stream_t*>(&stream), bufs,
-                 consumed, channel_after_write_cb)) {
+    if (written < 0) {
       LOG(ERROR) << "Error in write.\n";
-      delete vectors;
-      delete write_req;
+      goto ret;
+    }
+
+    if (written == 0) {
       return 0;
     }
 
-    return consumed;
+  ret:
+    return clear_out_vectors(written);
+  }
+
+  void maybe_merge_uv_bufs() {
+    assert(out_vectors.size() && "There is no vectors to merge.");
+
+    const auto begin = &out_uv_bufs[0];  // NOLINT
+    const auto end = begin + out_vectors.size();  // NOLINT
+
+    size_t size = 0;
+    auto p = end - 1;
+    for (; begin <= p && p->len <= 128; --p) {
+      size += p->len;
+    }
+
+    if (size <= 128) {
+      return;
+    }
+
+    ++p;
+
+    const auto count = end - p;  // NOLINT
+    assert(count > 0 &&
+           "There is no buffer to merge but the function did not return");
+
+    auto vec = packet::internal::make_shared_io_vector(size);
+    auto buf = vec->get_buf();
+    size_t offset = 0;
+    for (; p < end; p++) {
+      std::memcpy(buf + offset, p->base, p->len);
+      offset += p->len;
+    }
+
+    auto vec_size = out_vectors.size() - count;
+    if (!vec_size) {
+      out_vectors.clear();
+    } else {
+      out_vectors.erase(out_vectors.end() - count, out_vectors.end());
+    }
+
+    out_uv_bufs[vec_size] = {buf, size};
+    out_vectors.push_back(std::move(vec));
+  }
+
+  /**
+   * Clears out the vectors that are written and returns the count of those
+   * vectors.
+   */
+  size_t clear_out_vectors(size_t written) {
+    assert(out_vectors.size() && "Clearing vectors when there is no out buf.");
+
+    auto buf = &out_uv_bufs[0];
+    while (written) {
+      if (unlikely(written < buf->len)) {
+        // No need to fix buf.
+        buf->base += written;
+        buf->len -= written;
+        break;
+      }
+
+      written -= buf->len;
+
+      assert(!out_vectors.empty() &&
+             "out_vectors is empty but there is apparently a write.");
+
+      buf++;
+      assert(buf <= &out_uv_bufs[out_vectors.size()] &&
+             "Buffer ptr accesses an invalid location.");
+    }
+
+    const auto bufs_written = buf - &out_uv_bufs[0];  // NOLINT
+    assert(bufs_written <= out_vectors.size() &&
+           "Written more than what it's requested.");
+
+    const auto size = out_vectors.size() - bufs_written;  // NOLINT
+    if (likely(!size)) {
+      out_vectors.clear();
+    } else {
+      out_vectors.erase(out_vectors.begin(),
+                        out_vectors.begin() + bufs_written);
+      std::memmove(&out_uv_bufs[0], buf, size * sizeof(uv_buf_t));
+    }
+
+    return bufs_written;
   }
 
   /**
@@ -484,19 +555,20 @@ class Channel {
   /** Packet factory used for consuming packets. */
   Factory packet_factory;
 
-  /** The buffer used for outgoing packets. */
+  /** The buffer used for outgoing packets. Shared among threads. */
   particle::PerCpuRingBuffer<WriteReq> out_buffer;
 
-  // TODO(soheil): Write a light weight functor. We don't really need such a
-  //               structure. Then explain why we didn't use std::fucntion,
-  //               here.
+  /** The shared io vectors and uv_bufs ready to be written. Not thread safe. */
+  uv_buf_t out_uv_bufs[IOV_MAX];
+  std::deque<SharedIoVector> out_vectors;
+
   std::function<void(const ChannelPtr&, Packet&&)> read_handler;
   std::function<void(const ChannelPtr&)> error_handler;
   std::function<void(const ChannelPtr&)> close_handler;
 
-  std::atomic<RefCount> ref_count;
   std::atomic<bool> closed;
   std::atomic<bool> write_async_sent;
+  std::atomic<RefCount> ref_count;
 
   template <typename P, typename F>
   friend class ChannelListener;
@@ -517,6 +589,7 @@ class Channel {
   friend void delete_chan(const boost::intrusive_ptr<C>& channel);
 
   FRIEND_TEST(ChannelTest, Allocation);
+  FRIEND_TEST(ChannelTest, ClearVectors);
   FRIEND_TEST(ChannelTest, MakeChannel);
   FRIEND_TEST(ChannelTest, ReadPackets);
   FRIEND_TEST(ChannelTest, WritePackets);

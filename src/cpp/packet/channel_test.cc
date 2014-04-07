@@ -277,6 +277,40 @@ TEST(ChannelTest, WritePacketsPerCpu) {
   delete_loop(loop);
 }
 
+TEST(ChannelTest, ClearVectors) {
+  auto packet_factory = make_packet_factory<DummyPacket>();
+  auto loop = new_loop();
+  auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
+  EXPECT_NE(nullptr, dummy_channel);
+
+  EXPECT_TRUE(dummy_channel->out_vectors.empty());
+
+  const size_t SIZE = 128;
+
+  auto test_vector = packet::internal::make_shared_io_vector(SIZE);
+  auto buf = test_vector->get_buf();
+
+  // Full clear.
+  dummy_channel->out_vectors.push_back(test_vector);
+  dummy_channel->out_uv_bufs[0] = {buf, SIZE};
+  dummy_channel->clear_out_vectors(SIZE);
+  EXPECT_TRUE(dummy_channel->out_vectors.empty());
+
+  // Partial clear.
+  dummy_channel->out_vectors.push_back(test_vector);
+  dummy_channel->out_uv_bufs[0] = {buf, SIZE};
+  dummy_channel->clear_out_vectors(SIZE - 1);
+  EXPECT_FALSE(dummy_channel->out_vectors.empty());
+  EXPECT_EQ(size_t(1), dummy_channel->out_uv_bufs[0].len);
+  EXPECT_EQ(buf + (SIZE - 1), dummy_channel->out_uv_bufs[0].base);
+
+  dummy_channel->clear_out_vectors(1);
+  EXPECT_TRUE(dummy_channel->out_vectors.empty());
+
+  delete_chan(dummy_channel);
+  delete_loop(loop);
+}
+
 TEST(ChannelListener, MakeListener) {
 }
 
