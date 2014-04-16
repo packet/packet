@@ -87,16 +87,14 @@ class DummyPacket : public Packet {
 typedef intrusive_ptr<Channel<DummyPacket>> ChannelPtr;
 
 template <typename Channel>
-void delete_chan(const intrusive_ptr<Channel>& channel) {
-  intrusive_ptr_release(channel.get());
-  delete channel->write_async;
-  delete channel->close_async;
-  channel->write_async = nullptr;
-  channel->close_async = nullptr;
-}
+void delete_chan_and_loop(intrusive_ptr<Channel>* channel, uv_loop_t* loop) {
+  (*channel)->close();
+  channel->reset();
 
-void delete_loop(uv_loop_t* loop) {
-  uv_loop_close(loop);
+  uv_run(loop, UV_RUN_NOWAIT);
+  uv_run(loop, UV_RUN_NOWAIT);
+
+  EXPECT_EQ(0, uv_loop_close(loop));
   delete loop;
 }
 
@@ -112,8 +110,7 @@ TEST(ChannelTest, MakeChannel) {
   auto dummy_channel = make_channel<DummyPacket>(packet_factory, loop);
   EXPECT_NE(nullptr, dummy_channel);
 
-  delete_chan(dummy_channel);
-  delete_loop(loop);
+  delete_chan_and_loop(&dummy_channel, loop);
 }
 
 TEST(ChannelTest, Allocation) {
@@ -175,8 +172,7 @@ TEST(ChannelTest, Allocation) {
   EXPECT_EQ(Channel<DummyPacket>::VECTOR_SIZE,
             dummy_channel->io_vector->size());
 
-  delete_chan(dummy_channel);
-  delete_loop(loop);
+  delete_chan_and_loop(&dummy_channel, loop);
 }
 
 TEST(ChannelTest, ReadPackets) {
@@ -211,8 +207,7 @@ TEST(ChannelTest, ReadPackets) {
   EXPECT_EQ(packet_count, read_packet_count);
   EXPECT_EQ(buffer_size, read_packet_size);
 
-  delete_chan(dummy_channel);
-  delete_loop(loop);
+  delete_chan_and_loop(&dummy_channel, loop);
 }
 
 TEST(ChannelTest, WritePackets) {
@@ -234,8 +229,7 @@ TEST(ChannelTest, WritePackets) {
   DummyPacket r_p(make_io_vector(std::move(req.vec)));
   EXPECT_EQ(ID, r_p.get_id());
 
-  delete_chan(dummy_channel);
-  delete_loop(loop);
+  delete_chan_and_loop(&dummy_channel, loop);
 }
 
 TEST(ChannelTest, WritePacketsPerCpu) {
@@ -273,8 +267,7 @@ TEST(ChannelTest, WritePacketsPerCpu) {
 
   EXPECT_EQ(size_t(0), dummy_channel->out_buffer.guess_size());
 
-  delete_chan(dummy_channel);
-  delete_loop(loop);
+  delete_chan_and_loop(&dummy_channel, loop);
 }
 
 TEST(ChannelTest, ClearVectors) {
@@ -285,10 +278,22 @@ TEST(ChannelTest, ClearVectors) {
 
   EXPECT_TRUE(dummy_channel->out_vectors.empty());
 
-  const size_t SIZE = 128;
+  const size_t SIZE = Channel<DummyPacket>::COPY_THRESH;
 
   auto test_vector = packet::internal::make_shared_io_vector(SIZE);
   auto buf = test_vector->get_buf();
+
+  // Merge.
+  dummy_channel->out_vectors.push_back(test_vector);
+  dummy_channel->out_vectors.push_back(test_vector);
+  dummy_channel->out_uv_bufs[0] = {buf, SIZE};
+  dummy_channel->out_uv_bufs[1] = {buf, SIZE};
+  dummy_channel->maybe_merge_uv_bufs();
+  EXPECT_EQ(SIZE * 2, dummy_channel->out_uv_bufs[0].len);
+  EXPECT_EQ(size_t(1), dummy_channel->out_vectors.size());
+
+  dummy_channel->clear_out_vectors(SIZE * 2);
+  EXPECT_TRUE(dummy_channel->out_vectors.empty());
 
   // Full clear.
   dummy_channel->out_vectors.push_back(test_vector);
@@ -307,8 +312,7 @@ TEST(ChannelTest, ClearVectors) {
   dummy_channel->clear_out_vectors(1);
   EXPECT_TRUE(dummy_channel->out_vectors.empty());
 
-  delete_chan(dummy_channel);
-  delete_loop(loop);
+  delete_chan_and_loop(&dummy_channel, loop);
 }
 
 TEST(ChannelListener, MakeListener) {

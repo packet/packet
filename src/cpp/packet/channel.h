@@ -139,6 +139,7 @@ class Channel {
  private:
   static const size_t VECTOR_SIZE;
   static const size_t MAX_READ_SIZE;
+  static const size_t COPY_THRESH;
 
   struct WriteReq {
     uv_buf_t buf;
@@ -305,7 +306,7 @@ class Channel {
       return 0;
     }
 
-    // maybe_merge_uv_bufs();
+    maybe_merge_uv_bufs();
 
     int written = uv_try_write(reinterpret_cast<uv_stream_t*>(&stream),
                                out_uv_bufs, out_vectors.size());
@@ -331,11 +332,11 @@ class Channel {
 
     size_t size = 0;
     auto p = end - 1;
-    for (; begin <= p && p->len <= 128; --p) {
+    for (; begin <= p && p->len <= COPY_THRESH; --p) {
       size += p->len;
     }
 
-    if (size <= 128) {
+    if (size <= COPY_THRESH) {
       return;
     }
 
@@ -586,7 +587,8 @@ class Channel {
   friend void intrusive_ptr_release(Channel<P, F>* channel);
 
   template <typename C>
-  friend void delete_chan(const boost::intrusive_ptr<C>& channel);
+  friend void delete_chan_and_loop(boost::intrusive_ptr<C>* channel,
+                                   uv_loop_t* loop);
 
   FRIEND_TEST(ChannelTest, Allocation);
   FRIEND_TEST(ChannelTest, ClearVectors);
@@ -601,6 +603,9 @@ const size_t Channel<Packet, Factory>::VECTOR_SIZE = 128 * 1024 - 8;
 
 template <typename Packet, typename Factory>
 const size_t Channel<Packet, Factory>::MAX_READ_SIZE = 64 * 1024;
+
+template <typename Packet, typename Factory>
+const size_t Channel<Packet, Factory>::COPY_THRESH = 128;
 
 template <typename Packet, typename Factory, typename... Args>
 typename Channel<Packet, Factory>::ChannelPtr make_channel(Factory factory,
@@ -655,7 +660,6 @@ class ChannelClient final : private packet::internal::UvLoop {
   }
 
   ~ChannelClient() {
-    intrusive_ptr_release(channel.get());
     channel.reset();
   }
 
