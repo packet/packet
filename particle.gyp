@@ -45,6 +45,17 @@
       ],
     },
     {
+      'target_name': 'particle_snappy',
+      'type': 'static_library',
+      'type': '<(library)',
+      'dependencies': [
+        '<(particle_cpp_src_dir)/third_party/snappy.gyp:snappy',
+      ],
+      'export_dependent_settings': [
+        '<(particle_cpp_src_dir)/third_party/snappy.gyp:snappy',
+      ],
+    },
+    {
       'target_name': 'particle_testlib',
       'type': '<(library)',
       'dependencies': [
