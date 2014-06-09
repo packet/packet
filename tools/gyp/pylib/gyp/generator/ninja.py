@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import collections
 import copy
 import hashlib
 import json
@@ -343,7 +344,7 @@ class NinjaWriter:
     return os.path.normpath(os.path.join(obj, self.base_dir, path_dir,
                                          path_basename))
 
-  def WriteCollapsedDependencies(self, name, targets):
+  def WriteCollapsedDependencies(self, name, targets, order_only=None):
     """Given a list of targets, return a path for a single file
     representing the result of building all the targets or None.
 
@@ -351,10 +352,11 @@ class NinjaWriter:
 
     assert targets == filter(None, targets), targets
     if len(targets) == 0:
+      assert not order_only
       return None
-    if len(targets) > 1:
+    if len(targets) > 1 or order_only:
       stamp = self.GypPathToUniqueOutput(name + '.stamp')
-      targets = self.ninja.build(stamp, 'stamp', targets)
+      targets = self.ninja.build(stamp, 'stamp', targets, order_only=order_only)
       self.ninja.newline()
     return targets[0]
 
@@ -472,6 +474,8 @@ class NinjaWriter:
         else:
           print "Warning: Actions/rules writing object files don't work with " \
                 "multiarch targets, dropping. (target %s)" % spec['target_name']
+    elif self.flavor == 'mac' and len(self.archs) > 1:
+      link_deps = collections.defaultdict(list)
 
 
     if self.flavor == 'win' and self.target.type == 'static_library':
@@ -580,10 +584,7 @@ class NinjaWriter:
   def WriteActions(self, actions, extra_sources, prebuild,
                    extra_mac_bundle_resources):
     # Actions cd into the base directory.
-    env = self.GetSortedXcodeEnv()
-    if self.flavor == 'win':
-      env = self.msvs_settings.GetVSMacroEnv(
-          '$!PRODUCT_DIR', config=self.config_name)
+    env = self.GetToolchainEnv()
     all_outputs = []
     for action in actions:
       # First write out a rule for the action.
@@ -616,15 +617,17 @@ class NinjaWriter:
 
   def WriteRules(self, rules, extra_sources, prebuild,
                  mac_bundle_resources, extra_mac_bundle_resources):
-    env = self.GetSortedXcodeEnv()
+    env = self.GetToolchainEnv()
     all_outputs = []
     for rule in rules:
-      # First write out a rule for the rule action.
-      name = '%s_%s' % (rule['rule_name'],
-                        hashlib.md5(self.qualified_target).hexdigest())
       # Skip a rule with no action and no inputs.
       if 'action' not in rule and not rule.get('rule_sources', []):
         continue
+
+      # First write out a rule for the rule action.
+      name = '%s_%s' % (rule['rule_name'],
+                        hashlib.md5(self.qualified_target).hexdigest())
+
       args = rule['action']
       description = self.GenerateDescription(
           'RULE',
@@ -653,8 +656,22 @@ class NinjaWriter:
           return path.replace('\\', '/')
         return path
 
+      inputs = [self.GypPathToNinja(i, env) for i in rule.get('inputs', [])]
+
+      # If there are n source files matching the rule, and m additional rule
+      # inputs, then adding 'inputs' to each build edge written below will
+      # write m * n inputs. Collapsing reduces this to m + n.
+      sources = rule.get('rule_sources', [])
+      num_inputs = len(inputs)
+      if prebuild:
+        num_inputs += 1
+      if num_inputs > 2 and len(sources) > 2:
+        inputs = [self.WriteCollapsedDependencies(
+          rule['rule_name'], inputs, order_only=prebuild)]
+        prebuild = []
+
       # For each source file, write an edge that generates all the outputs.
-      for source in rule.get('rule_sources', []):
+      for source in sources:
         source = os.path.normpath(source)
         dirname, basename = os.path.split(source)
         root, ext = os.path.splitext(basename)
@@ -663,9 +680,6 @@ class NinjaWriter:
         outputs = [self.ExpandRuleVariables(o, root, dirname,
                                             source, ext, basename)
                    for o in rule['outputs']]
-        inputs = [self.ExpandRuleVariables(i, root, dirname,
-                                           source, ext, basename)
-                  for i in rule.get('inputs', [])]
 
         if int(rule.get('process_outputs_as_sources', False)):
           extra_sources += outputs
@@ -703,10 +717,11 @@ class NinjaWriter:
           else:
             assert var == None, repr(var)
 
-        inputs = [self.GypPathToNinja(i, env) for i in inputs]
         outputs = [self.GypPathToNinja(o, env) for o in outputs]
-        extra_bindings.append(('unique_name',
-            hashlib.md5(outputs[0]).hexdigest()))
+        if self.flavor == 'win':
+          # WriteNewNinjaRule uses unique_name for creating an rsp file on win.
+          extra_bindings.append(('unique_name',
+              hashlib.md5(outputs[0]).hexdigest()))
         self.ninja.build(outputs, rule_name, self.GypPathToNinja(source),
                          implicit=inputs,
                          order_only=prebuild,
@@ -718,7 +733,7 @@ class NinjaWriter:
 
   def WriteCopies(self, copies, prebuild, mac_bundle_depends):
     outputs = []
-    env = self.GetSortedXcodeEnv()
+    env = self.GetToolchainEnv()
     for copy in copies:
       for path in copy['files']:
         # Normalize the path so trailing slashes don't confuse us.
@@ -810,19 +825,23 @@ class NinjaWriter:
       cflags_objcc = ['$cflags_cc'] + \
                      self.xcode_settings.GetCflagsObjCC(config_name)
     elif self.flavor == 'win':
+      asmflags = self.msvs_settings.GetAsmflags(config_name)
       cflags = self.msvs_settings.GetCflags(config_name)
       cflags_c = self.msvs_settings.GetCflagsC(config_name)
       cflags_cc = self.msvs_settings.GetCflagsCC(config_name)
       extra_defines = self.msvs_settings.GetComputedDefines(config_name)
-      pdbpath = self.msvs_settings.GetCompilerPdbName(
+      # See comment at cc_command for why there's two .pdb files.
+      pdbpath_c = pdbpath_cc = self.msvs_settings.GetCompilerPdbName(
           config_name, self.ExpandSpecial)
-      if not pdbpath:
+      if not pdbpath_c:
         obj = 'obj'
         if self.toolset != 'target':
           obj += '.' + self.toolset
-        pdbpath = os.path.normpath(os.path.join(obj, self.base_dir,
-                                                self.name + '.pdb'))
-      self.WriteVariableList(ninja_file, 'pdbname', [pdbpath])
+        pdbpath = os.path.normpath(os.path.join(obj, self.base_dir, self.name))
+        pdbpath_c = pdbpath + '.c.pdb'
+        pdbpath_cc = pdbpath + '.cc.pdb'
+      self.WriteVariableList(ninja_file, 'pdbname_c', [pdbpath_c])
+      self.WriteVariableList(ninja_file, 'pdbname_cc', [pdbpath_cc])
       self.WriteVariableList(ninja_file, 'pchprefix', [self.name])
     else:
       cflags = config.get('cflags', [])
@@ -841,16 +860,17 @@ class NinjaWriter:
     self.WriteVariableList(ninja_file, 'defines',
                            [Define(d, self.flavor) for d in defines])
     if self.flavor == 'win':
+      self.WriteVariableList(ninja_file, 'asmflags',
+                             map(self.ExpandSpecial, asmflags))
       self.WriteVariableList(ninja_file, 'rcflags',
           [QuoteShellArgument(self.ExpandSpecial(f), self.flavor)
            for f in self.msvs_settings.GetRcflags(config_name,
                                                   self.GypPathToNinja)])
 
     include_dirs = config.get('include_dirs', [])
-    env = self.GetSortedXcodeEnv()
+
+    env = self.GetToolchainEnv()
     if self.flavor == 'win':
-      env = self.msvs_settings.GetVSMacroEnv('$!PRODUCT_DIR',
-                                             config=config_name)
       include_dirs = self.msvs_settings.AdjustIncludeDirs(include_dirs,
                                                           config_name)
     self.WriteVariableList(ninja_file, 'includes',
@@ -1034,15 +1054,21 @@ class NinjaWriter:
           self.GypPathToNinja, arch)
       ldflags = env_ldflags + ldflags
     elif self.flavor == 'win':
-      manifest_name = self.GypPathToUniqueOutput(
+      manifest_base_name = self.GypPathToUniqueOutput(
           self.ComputeOutputFileName(spec))
-      ldflags, manifest_files = self.msvs_settings.GetLdflags(config_name,
-          self.GypPathToNinja, self.ExpandSpecial, manifest_name, is_executable)
+      ldflags, intermediate_manifest, manifest_files = \
+          self.msvs_settings.GetLdflags(config_name, self.GypPathToNinja,
+                                        self.ExpandSpecial, manifest_base_name,
+                                        output, is_executable,
+                                        self.toplevel_build)
       ldflags = env_ldflags + ldflags
       self.WriteVariableList(ninja_file, 'manifests', manifest_files)
+      implicit_deps = implicit_deps.union(manifest_files)
+      if intermediate_manifest:
+        self.WriteVariableList(
+            ninja_file, 'intermediatemanifest', [intermediate_manifest])
       command_suffix = _GetWinLinkRuleNameSuffix(
-          self.msvs_settings.IsEmbedManifest(config_name),
-          self.msvs_settings.IsLinkIncremental(config_name))
+          self.msvs_settings.IsEmbedManifest(config_name))
       def_file = self.msvs_settings.GetDefFile(self.GypPathToNinja)
       if def_file:
         implicit_deps.add(def_file)
@@ -1086,17 +1112,45 @@ class NinjaWriter:
       extra_bindings.append(('soname', os.path.split(output)[1]))
       extra_bindings.append(('lib',
                             gyp.common.EncodePOSIXShellArgument(output)))
+      if self.flavor != 'win':
+        link_file_list = output
+        if self.is_mac_bundle:
+          # 'Dependency Framework.framework/Versions/A/Dependency Framework' ->
+          # 'Dependency Framework.framework.rsp'
+          link_file_list = self.xcode_settings.GetWrapperName()
+        if arch:
+          link_file_list += '.' + arch
+        link_file_list += '.rsp'
+        # If an rspfile contains spaces, ninja surrounds the filename with
+        # quotes around it and then passes it to open(), creating a file with
+        # quotes in its name (and when looking for the rsp file, the name
+        # makes it through bash which strips the quotes) :-/
+        link_file_list = link_file_list.replace(' ', '_')
+        extra_bindings.append(
+          ('link_file_list',
+            gyp.common.EncodePOSIXShellArgument(link_file_list)))
       if self.flavor == 'win':
-        extra_bindings.append(('dll', output))
+        extra_bindings.append(('binary', output))
         if '/NOENTRY' not in ldflags:
           self.target.import_lib = output + '.lib'
           extra_bindings.append(('implibflag',
                                  '/IMPLIB:%s' % self.target.import_lib))
+          pdbname = self.msvs_settings.GetPDBName(
+              config_name, self.ExpandSpecial, output + '.pdb')
           output = [output, self.target.import_lib]
+          if pdbname:
+            output.append(pdbname)
       elif not self.is_mac_bundle:
         output = [output, output + '.TOC']
       else:
         command = command + '_notoc'
+    elif self.flavor == 'win':
+      extra_bindings.append(('binary', output))
+      pdbname = self.msvs_settings.GetPDBName(
+          config_name, self.ExpandSpecial, output + '.pdb')
+      if pdbname:
+        output = [output, pdbname]
+
 
     if len(solibs):
       extra_bindings.append(('solibs', gyp.common.EncodePOSIXShellList(solibs)))
@@ -1175,6 +1229,19 @@ class NinjaWriter:
                        variables=variables)
     self.target.bundle = output
     return output
+
+  def GetToolchainEnv(self, additional_settings=None):
+    """Returns the variables toolchain would set for build steps."""
+    env = self.GetSortedXcodeEnv(additional_settings=additional_settings)
+    if self.flavor == 'win':
+      env = self.GetMsvsToolchainEnv(
+          additional_settings=additional_settings)
+    return env
+
+  def GetMsvsToolchainEnv(self, additional_settings=None):
+    """Returns the variables Visual Studio would set for build steps."""
+    return self.msvs_settings.GetVSMacroEnv('$!PRODUCT_DIR',
+                                             config=self.config_name)
 
   def GetSortedXcodeEnv(self, additional_settings=None):
     """Returns the variables Xcode would set for build steps."""
@@ -1502,10 +1569,7 @@ def CalculateGeneratorInputInfo(params):
 
 def OpenOutput(path, mode='w'):
   """Open |path| for writing, creating directories if necessary."""
-  try:
-    os.makedirs(os.path.dirname(path))
-  except OSError:
-    pass
+  gyp.common.EnsureDirExists(path)
   return open(path, mode)
 
 
@@ -1518,6 +1582,10 @@ def CommandWithWrapper(cmd, wrappers, prog):
 
 def GetDefaultConcurrentLinks():
   """Returns a best-guess for a number of concurrent links."""
+  pool_size = int(os.getenv('GYP_LINK_CONCURRENCY', 0))
+  if pool_size:
+    return pool_size
+
   if sys.platform in ('win32', 'cygwin'):
     import ctypes
 
@@ -1542,14 +1610,15 @@ def GetDefaultConcurrentLinks():
     hard_cap = max(1, int(os.getenv('GYP_LINK_CONCURRENCY_MAX', 2**32)))
     return min(mem_limit, hard_cap)
   elif sys.platform.startswith('linux'):
-    with open("/proc/meminfo") as meminfo:
-      memtotal_re = re.compile(r'^MemTotal:\s*(\d*)\s*kB')
-      for line in meminfo:
-        match = memtotal_re.match(line)
-        if not match:
-          continue
-        # Allow 8Gb per link on Linux because Gold is quite memory hungry
-        return max(1, int(match.group(1)) / (8 * (2 ** 20)))
+    if os.path.exists("/proc/meminfo"):
+      with open("/proc/meminfo") as meminfo:
+        memtotal_re = re.compile(r'^MemTotal:\s*(\d*)\s*kB')
+        for line in meminfo:
+          match = memtotal_re.match(line)
+          if not match:
+            continue
+          # Allow 8Gb per link on Linux because Gold is quite memory hungry
+          return max(1, int(match.group(1)) / (8 * (2 ** 20)))
     return 1
   elif sys.platform == 'darwin':
     try:
@@ -1564,81 +1633,57 @@ def GetDefaultConcurrentLinks():
     return 1
 
 
-def _GetWinLinkRuleNameSuffix(embed_manifest, link_incremental):
+def _GetWinLinkRuleNameSuffix(embed_manifest):
   """Returns the suffix used to select an appropriate linking rule depending on
-  whether the manifest embedding and/or incremental linking is enabled."""
-  suffix = ''
-  if embed_manifest:
-    suffix += '_embed'
-    if link_incremental:
-      suffix += '_inc'
-  return suffix
+  whether the manifest embedding is enabled."""
+  return '_embed' if embed_manifest else ''
 
 
-def _AddWinLinkRules(master_ninja, embed_manifest, link_incremental):
+def _AddWinLinkRules(master_ninja, embed_manifest):
   """Adds link rules for Windows platform to |master_ninja|."""
   def FullLinkCommand(ldcmd, out, binary_type):
-    cmd = ('cmd /c %(ldcmd)s'
-           ' && %(python)s gyp-win-tool manifest-wrapper $arch'
-           ' cmd /c if exist %(out)s.manifest del %(out)s.manifest'
-           ' && %(python)s gyp-win-tool manifest-wrapper $arch'
-           ' $mt -nologo -manifest $manifests')
-    if embed_manifest and not link_incremental:
-      # Embed manifest into a binary. If incremental linking is enabled,
-      # embedding is postponed to the re-linking stage (see below).
-      cmd += ' -outputresource:%(out)s;%(resname)s'
-    else:
-      # Save manifest as an external file.
-      cmd += ' -out:%(out)s.manifest'
-    if link_incremental:
-      # There is no point in generating separate rule for the case when
-      # incremental linking is enabled, but manifest embedding is disabled.
-      # In that case the basic rule should be used (e.g. 'link').
-      # See also implementation of _GetWinLinkRuleNameSuffix().
-      assert embed_manifest
-      # Make .rc file out of manifest, compile it to .res file and re-link.
-      cmd += (' && %(python)s gyp-win-tool manifest-to-rc $arch'
-              ' %(out)s.manifest %(out)s.manifest.rc %(resname)s'
-              ' && %(python)s gyp-win-tool rc-wrapper $arch $rc'
-              ' %(out)s.manifest.rc'
-              ' && %(ldcmd)s %(out)s.manifest.res')
     resource_name = {
       'exe': '1',
       'dll': '2',
     }[binary_type]
-    return cmd % {'python': sys.executable,
-                  'out': out,
-                  'ldcmd': ldcmd,
-                  'resname': resource_name}
-
-  rule_name_suffix = _GetWinLinkRuleNameSuffix(embed_manifest, link_incremental)
-  dlldesc = 'LINK%s(DLL) $dll' % rule_name_suffix.upper()
-  dllcmd = ('%s gyp-win-tool link-wrapper $arch '
-            '$ld /nologo $implibflag /DLL /OUT:$dll '
-            '/PDB:$dll.pdb @$dll.rsp' % sys.executable)
-  dllcmd = FullLinkCommand(dllcmd, '$dll', 'dll')
+    return '%(python)s gyp-win-tool link-with-manifests $arch %(embed)s ' \
+           '%(out)s "%(ldcmd)s" %(resname)s $mt $rc "$intermediatemanifest" ' \
+           '$manifests' % {
+               'python': sys.executable,
+               'out': out,
+               'ldcmd': ldcmd,
+               'resname': resource_name,
+               'embed': embed_manifest }
+  rule_name_suffix = _GetWinLinkRuleNameSuffix(embed_manifest)
+  use_separate_mspdbsrv = (
+      int(os.environ.get('GYP_USE_SEPARATE_MSPDBSRV', '0')) != 0)
+  dlldesc = 'LINK%s(DLL) $binary' % rule_name_suffix.upper()
+  dllcmd = ('%s gyp-win-tool link-wrapper $arch %s '
+            '$ld /nologo $implibflag /DLL /OUT:$binary '
+            '@$binary.rsp' % (sys.executable, use_separate_mspdbsrv))
+  dllcmd = FullLinkCommand(dllcmd, '$binary', 'dll')
   master_ninja.rule('solink' + rule_name_suffix,
                     description=dlldesc, command=dllcmd,
-                    rspfile='$dll.rsp',
+                    rspfile='$binary.rsp',
                     rspfile_content='$libs $in_newline $ldflags',
                     restat=True,
                     pool='link_pool')
   master_ninja.rule('solink_module' + rule_name_suffix,
                     description=dlldesc, command=dllcmd,
-                    rspfile='$dll.rsp',
+                    rspfile='$binary.rsp',
                     rspfile_content='$libs $in_newline $ldflags',
                     restat=True,
                     pool='link_pool')
   # Note that ldflags goes at the end so that it has the option of
   # overriding default settings earlier in the command line.
-  exe_cmd = ('%s gyp-win-tool link-wrapper $arch '
-             '$ld /nologo /OUT:$out /PDB:$out.pdb @$out.rsp' %
-              sys.executable)
-  exe_cmd = FullLinkCommand(exe_cmd, '$out', 'exe')
+  exe_cmd = ('%s gyp-win-tool link-wrapper $arch %s '
+             '$ld /nologo /OUT:$binary @$binary.rsp' %
+              (sys.executable, use_separate_mspdbsrv))
+  exe_cmd = FullLinkCommand(exe_cmd, '$binary', 'exe')
   master_ninja.rule('link' + rule_name_suffix,
-                    description='LINK%s $out' % rule_name_suffix.upper(),
+                    description='LINK%s $binary' % rule_name_suffix.upper(),
                     command=exe_cmd,
-                    rspfile='$out.rsp',
+                    rspfile='$binary.rsp',
                     rspfile_content='$in_newline $libs $ldflags',
                     pool='link_pool')
 
@@ -1656,9 +1701,8 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
 
   toplevel_build = os.path.join(options.toplevel_dir, build_dir)
 
-  master_ninja = ninja_syntax.Writer(
-      OpenOutput(os.path.join(toplevel_build, 'build.ninja')),
-      width=120)
+  master_ninja_file = OpenOutput(os.path.join(toplevel_build, 'build.ninja'))
+  master_ninja = ninja_syntax.Writer(master_ninja_file, width=120)
 
   # Put build-time support tools in out/{config_name}.
   gyp.common.CopyTool(flavor, toplevel_build)
@@ -1679,8 +1723,8 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     ld = 'link.exe'
     ld_host = '$ld'
   else:
-    cc = 'gcc'
-    cxx = 'g++'
+    cc = 'cc'
+    cxx = 'c++'
     ld = '$cc'
     ldxx = '$cxx'
     ld_host = '$cc_host'
@@ -1690,6 +1734,7 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
   cxx_host = None
   cc_host_global_setting = None
   cxx_host_global_setting = None
+  clang_cl = None
 
   build_file, _, _ = gyp.common.ParseQualifiedTarget(target_list[0])
   make_global_settings = data[build_file].get('make_global_settings', [])
@@ -1699,6 +1744,8 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
   for key, value in make_global_settings:
     if key == 'CC':
       cc = os.path.join(build_to_root, value)
+      if cc.endswith('clang-cl'):
+        clang_cl = cc
     if key == 'CXX':
       cxx = os.path.join(build_to_root, value)
     if key == 'CC.host':
@@ -1721,9 +1768,15 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     cl_paths = gyp.msvs_emulation.GenerateEnvironmentFiles(
         toplevel_build, generator_flags, OpenOutput)
     for arch, path in cl_paths.iteritems():
-      master_ninja.variable(
-          'cl_' + arch, CommandWithWrapper('CC', wrappers,
-                                           QuoteShellArgument(path, flavor)))
+      if clang_cl:
+        # If we have selected clang-cl, use that instead.
+        path = clang_cl
+      command = CommandWithWrapper('CC', wrappers,
+          QuoteShellArgument(path, 'win'))
+      if clang_cl:
+        # Use clang-cl to cross-compile for x86 or x86_64.
+        command += (' -m32' if arch == 'x86' else ' -m64')
+      master_ninja.variable('cl_' + arch, command)
 
   cc = GetEnvironFallback(['CC_target', 'CC'], cc)
   master_ninja.variable('cc', CommandWithWrapper('CC', wrappers, cc))
@@ -1798,14 +1851,20 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
       depfile='$out.d',
       deps=deps)
   else:
+    # TODO(scottmg) Separate pdb names is a test to see if it works around
+    # http://crbug.com/142362. It seems there's a race between the creation of
+    # the .pdb by the precompiled header step for .cc and the compilation of
+    # .c files. This should be handled by mspdbsrv, but rarely errors out with
+    #   c1xx : fatal error C1033: cannot open program database
+    # By making the rules target separate pdb files this might be avoided.
     cc_command = ('ninja -t msvc -e $arch ' +
                   '-- '
                   '$cc /nologo /showIncludes /FC '
-                  '@$out.rsp /c $in /Fo$out /Fd$pdbname ')
+                  '@$out.rsp /c $in /Fo$out /Fd$pdbname_c ')
     cxx_command = ('ninja -t msvc -e $arch ' +
                    '-- '
                    '$cxx /nologo /showIncludes /FC '
-                   '@$out.rsp /c $in /Fo$out /Fd$pdbname ')
+                   '@$out.rsp /c $in /Fo$out /Fd$pdbname_cc ')
     master_ninja.rule(
       'cc',
       description='CC $out',
@@ -1835,9 +1894,9 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
                sys.executable))
     master_ninja.rule(
       'asm',
-      description='ASM $in',
+      description='ASM $out',
       command=('%s gyp-win-tool asm-wrapper '
-               '$arch $asm $defines $includes /c /Fo $out $in' %
+               '$arch $asm $defines $includes $asmflags /c /Fo $out $in' %
                sys.executable))
 
   if flavor != 'mac' and flavor != 'win':
@@ -1856,32 +1915,33 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     # The resulting string leaves an uninterpolated %{suffix} which
     # is used in the final substitution below.
     mtime_preserving_solink_base = (
-        'if [ ! -e $lib -o ! -e ${lib}.TOC ]; then '
-        '%(solink)s && %(extract_toc)s > ${lib}.TOC; else '
-        '%(solink)s && %(extract_toc)s > ${lib}.tmp && '
-        'if ! cmp -s ${lib}.tmp ${lib}.TOC; then mv ${lib}.tmp ${lib}.TOC ; '
+        'if [ ! -e $lib -o ! -e $lib.TOC ]; then '
+        '%(solink)s && %(extract_toc)s > $lib.TOC; else '
+        '%(solink)s && %(extract_toc)s > $lib.tmp && '
+        'if ! cmp -s $lib.tmp $lib.TOC; then mv $lib.tmp $lib.TOC ; '
         'fi; fi'
         % { 'solink':
               '$ld -shared $ldflags -o $lib -Wl,-soname=$soname %(suffix)s',
             'extract_toc':
-              ('{ readelf -d ${lib} | grep SONAME ; '
-               'nm -gD -f p ${lib} | cut -f1-2 -d\' \'; }')})
+              ('{ readelf -d $lib | grep SONAME ; '
+               'nm -gD -f p $lib | cut -f1-2 -d\' \'; }')})
 
     master_ninja.rule(
       'solink',
       description='SOLINK $lib',
       restat=True,
-      command=(mtime_preserving_solink_base % {
-          'suffix': '-Wl,--whole-archive $in $solibs -Wl,--no-whole-archive '
-          '$libs'}),
+      command=mtime_preserving_solink_base % {'suffix': '@$link_file_list'},
+      rspfile='$link_file_list',
+      rspfile_content=
+          '-Wl,--whole-archive $in $solibs -Wl,--no-whole-archive $libs',
       pool='link_pool')
     master_ninja.rule(
       'solink_module',
       description='SOLINK(module) $lib',
       restat=True,
-      command=(mtime_preserving_solink_base % {
-          'suffix': '-Wl,--start-group $in $solibs -Wl,--end-group '
-          '$libs'}),
+      command=mtime_preserving_solink_base % {'suffix': '@$link_file_list'},
+      rspfile='$link_file_list',
+      rspfile_content='-Wl,--start-group $in $solibs -Wl,--end-group $libs',
       pool='link_pool')
     master_ninja.rule(
       'link',
@@ -1893,17 +1953,13 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     master_ninja.rule(
         'alink',
         description='LIB $out',
-        command=('%s gyp-win-tool link-wrapper $arch '
+        command=('%s gyp-win-tool link-wrapper $arch False '
                  '$ar /nologo /ignore:4221 /OUT:$out @$out.rsp' %
                  sys.executable),
         rspfile='$out.rsp',
         rspfile_content='$in_newline $libflags')
-    _AddWinLinkRules(master_ninja, embed_manifest=True, link_incremental=True)
-    _AddWinLinkRules(master_ninja, embed_manifest=True, link_incremental=False)
-    _AddWinLinkRules(master_ninja, embed_manifest=False, link_incremental=False)
-    # Do not generate rules for embed_manifest=False and link_incremental=True
-    # because in that case rules for (False, False) should be used (see
-    # implementation of _GetWinLinkRuleNameSuffix()).
+    _AddWinLinkRules(master_ninja, embed_manifest=True)
+    _AddWinLinkRules(master_ninja, embed_manifest=False)
   else:
     master_ninja.rule(
       'objc',
@@ -1935,16 +1991,16 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     # comment in the posix section above for details.
     solink_base = '$ld %(type)s $ldflags -o $lib %(suffix)s'
     mtime_preserving_solink_base = (
-        'if [ ! -e $lib -o ! -e ${lib}.TOC ] || '
+        'if [ ! -e $lib -o ! -e $lib.TOC ] || '
              # Always force dependent targets to relink if this library
              # reexports something. Handling this correctly would require
              # recursive TOC dumping but this is rare in practice, so punt.
              'otool -l $lib | grep -q LC_REEXPORT_DYLIB ; then '
-          '%(solink)s && %(extract_toc)s > ${lib}.TOC; '
+          '%(solink)s && %(extract_toc)s > $lib.TOC; '
         'else '
-          '%(solink)s && %(extract_toc)s > ${lib}.tmp && '
-          'if ! cmp -s ${lib}.tmp ${lib}.TOC; then '
-            'mv ${lib}.tmp ${lib}.TOC ; '
+          '%(solink)s && %(extract_toc)s > $lib.tmp && '
+          'if ! cmp -s $lib.tmp $lib.TOC; then '
+            'mv $lib.tmp $lib.TOC ; '
           'fi; '
         'fi'
         % { 'solink': solink_base,
@@ -1952,34 +2008,42 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
               '{ otool -l $lib | grep LC_ID_DYLIB -A 5; '
               'nm -gP $lib | cut -f1-2 -d\' \' | grep -v U$$; true; }'})
 
-    solink_suffix = '$in $solibs $libs$postbuilds'
+
+    solink_suffix = '@$link_file_list$postbuilds'
     master_ninja.rule(
       'solink',
       description='SOLINK $lib, POSTBUILDS',
       restat=True,
       command=mtime_preserving_solink_base % {'suffix': solink_suffix,
                                               'type': '-shared'},
+      rspfile='$link_file_list',
+      rspfile_content='$in $solibs $libs',
       pool='link_pool')
     master_ninja.rule(
       'solink_notoc',
       description='SOLINK $lib, POSTBUILDS',
       restat=True,
       command=solink_base % {'suffix':solink_suffix, 'type': '-shared'},
+      rspfile='$link_file_list',
+      rspfile_content='$in $solibs $libs',
       pool='link_pool')
 
-    solink_module_suffix = '$in $solibs $libs$postbuilds'
     master_ninja.rule(
       'solink_module',
       description='SOLINK(module) $lib, POSTBUILDS',
       restat=True,
-      command=mtime_preserving_solink_base % {'suffix': solink_module_suffix,
+      command=mtime_preserving_solink_base % {'suffix': solink_suffix,
                                               'type': '-bundle'},
+      rspfile='$link_file_list',
+      rspfile_content='$in $solibs $libs',
       pool='link_pool')
     master_ninja.rule(
       'solink_module_notoc',
       description='SOLINK(module) $lib, POSTBUILDS',
       restat=True,
-      command=solink_base % {'suffix': solink_module_suffix, 'type': '-bundle'},
+      command=solink_base % {'suffix': solink_suffix, 'type': '-bundle'},
+      rspfile='$link_file_list',
+      rspfile_content='$in $solibs $libs',
       pool='link_pool')
 
     master_ninja.rule(
@@ -2047,7 +2111,8 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
 
     this_make_global_settings = data[build_file].get('make_global_settings', [])
     assert make_global_settings == this_make_global_settings, (
-        "make_global_settings needs to be the same for all targets.")
+        "make_global_settings needs to be the same for all targets. %s vs. %s" %
+        (this_make_global_settings, make_global_settings))
 
     spec = target_dicts[qualified_target]
     if flavor == 'mac':
@@ -2097,6 +2162,8 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     master_ninja.newline()
     master_ninja.build('all', 'phony', list(all_outputs))
     master_ninja.default(generator_flags.get('default_target', 'all'))
+
+  master_ninja_file.close()
 
 
 def PerformBuild(data, configurations, params):
