@@ -74,7 +74,7 @@ if [ -n $staged_python_files ]; then
   if [ -n "$staged_python_files" ]; then
     set -e
     export PYTHONPATH=src/python:test/python:/usr/lib/python2.7/site-packages
-    pylint -i y ${staged_python_files[*]}
+    pylint -i y -f colorized ${staged_python_files[*]}
   fi
 fi
 

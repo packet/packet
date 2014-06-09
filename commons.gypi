@@ -23,6 +23,9 @@
     'particle_dir': '<(packet_dir)/src/cpp/third_party/particle',
     'libuv_dir': '<(packet_dir)/src/cpp/third_party/libuv',
 
+    # libuv.
+    'uv_library%': 'static_library',
+
     # Compilation flags.
     'common_cflags': [
       # '-fno-strict-aliasing',
