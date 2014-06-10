@@ -1,11 +1,8 @@
 <%!
-  from packet.generator.cpp import CppNamingStrategy
+  from packet.generator.cpp import BUILTIN_TYPES
   from packet.generator.cpp import TYPE_VARIANTS
   from packet.parser.model import Packet
   from packet.types import BuiltInType
-%>
-<%
-  self.cpp_naming = CppNamingStrategy()
 %>
 
 <%block name="header">\
@@ -27,6 +24,11 @@ ${self.namespace_close(pom)}
 
 <%block name="footer" />
 
+<%!
+  def clean_ws(txt):
+    return ' '.join(txt.strip().split())
+%>
+
 <%def name="namespace_open(pom)" buffered="True" filter="trim">
 namespace ${self.namespace_name(pom)} {\
 </%def>
@@ -41,21 +43,48 @@ namespace ${self.namespace_name(pom)} {\
 
 <%def name="class_name(packet, qualified=False)" buffered="True" filter="trim">
 % if qualified:
-  ${namespace_name(packet.pom)}::${self.cpp_naming.get_class_name(packet.name)}
+  ${namespace_name(packet.pom)}::${packet.name}
 % else:
-  ${self.cpp_naming.get_class_name(packet.name)}
+  ${packet.name}
 % endif
 </%def>
 
-<%def name="type_name(type, const=False, variant=TYPE_VARIANTS.NONE,
+<%def name="qualified_name(ns, t)" buffered="True" filter="trim">
+  ${ns}::${t}
+</%def>
+
+<%def name="type_name(t, const=False, variant=TYPE_VARIANTS.NONE,
                       repeated_info=None)" buffered="True" filter="trim">
-  ${self.cpp_naming.get_cpptype_name(type, const, variant, repeated_info)}
+  <%
+    if isinstance(t, BuiltInType):
+      cpp_type = BUILTIN_TYPES[t.name]
+    else:
+      cpp_type = self.qualified_name(t.pom.namespace, t.name)
+
+    if const:
+      cpp_type = 'const ' + cpp_type
+
+    if repeated_info:
+      if repeated_info.count:
+        cpp_type = 'std::array<%s, %d>' % (cpp_type, repeated_info.count)
+      else:
+        cpp_type = 'std::vector<%s>' % cpp_type
+
+    ## TODO(soheil): Maybe create an enum?
+    if variant == TYPE_VARIANTS.POINTER:
+      cpp_type = '%s*' % cpp_type
+    elif variant == TYPE_VARIANTS.REFERENCE:
+      cpp_type = '%s&' % cpp_type
+    elif variant == TYPE_VARIANTS.RVALUE and not builtin:
+      cpp_type = '%s&&' % cpp_type
+  %>
+
+  ${cpp_type}
 </%def>
 
 <%def name="field_type_name(field, const=False, variant=TYPE_VARIANTS.NONE)"
     buffered="True" filter="trim">
-  ${self.cpp_naming.get_cpptype_name(field.type, const, variant,
-                                     field.repeated_info)}
+  ${self.type_name(field.type, const, variant, field.repeated_info)}
 </%def>
 
 <%def name="invoke_field_static_getter(packet, field)"
@@ -117,8 +146,10 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="method_prototype(const=False, qualified=False, static=False)"
-      buffered="True" filter="trim">
-  ${'static' if static and not qualified else ''} ${caller.return_type()} ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${caller.args()}) ${'const' if const else ''}
+      buffered="True" filter="clean_ws">
+  ${'static' if static and not qualified else ''} ${caller.return_type()}
+  ${caller.class_name() + '::' if qualified else ''}${caller.method_name()}(${
+      caller.args()}) ${'const' if const else ''}
 </%def>
 
 <%def name="copy_assign_prototype(packet)" buffered="True" filter="trim">
@@ -217,7 +248,8 @@ namespace ${self.namespace_name(pom)} {\
   % endif
 </%def>
 
-<%def name="setter_prototype(field, qualified=False)" buffered="True" filter="trim">
+<%def name="setter_prototype(field, qualified=False)" buffered="True"
+      filter="trim">
   <%self:method_prototype qualified="${qualified}">
     <%def name="return_type()" filter="trim">
       void
@@ -242,7 +274,8 @@ namespace ${self.namespace_name(pom)} {\
   % endif
 </%def>
 
-<%def name="static_setter_prototype(field, qualified=False)" buffered="True" filter="trim">
+<%def name="static_setter_prototype(field, qualified=False)" buffered="True"
+      filter="trim">
   <%self:method_prototype qualified="${qualified}" static="True">
     <%def name="return_type()" filter="trim">
       void
@@ -438,8 +471,10 @@ namespace ${self.namespace_name(pom)} {\
   cast_to_${packet.name}
 </%def>
 
-<%def name="cast_to_child_invoke(packet, var_name)" buffered="True" filter="trim">
-  ${self.namespace_name(packet.pom)}::${cast_to_child_method_name(packet)}(${var_name})
+<%def name="cast_to_child_invoke(packet, var_name)" buffered="True"
+      filter="trim">
+  ${self.namespace_name(packet.pom)}::${cast_to_child_method_name(packet)}(${
+      var_name})
 </%def>
 
 <%def name="cast_to_child_prototype(packet, qualified=False)" buffered="True"
@@ -460,16 +495,18 @@ namespace ${self.namespace_name(pom)} {\
 </%def>
 
 <%def name="type_selector_cond(packet, var_name=None, is_pointer=False, io_vec='io_vec')"
-    buffered="True" filter="trim">
+    buffered="True" filter="clean_ws">
   <%
     conditions = packet.get_type_selector_condition()
     assert conditions, 'Type selector cannot be empty for %s' % packet.name
   %>
   % for field, value in conditions:
     % if not var_name:
-  ${self.class_name(field.packet, qualified=True)}::${self.static_getter_name(field)}(${io_vec}) == ${value} &&
+  ${self.class_name(field.packet, qualified=True)}::${
+      self.static_getter_name(field)}(${io_vec}) == ${value} &&
     % else:
-  ${var_name}${'->' if is_pointer else '.'}${self.getter_name(field)}() == ${value} &&
+  ${var_name}${'->' if is_pointer else '.'}${
+      self.getter_name(field)}() == ${value} &&
     % endif
   % endfor
   true

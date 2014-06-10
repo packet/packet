@@ -1,6 +1,6 @@
 <%inherit file="cpp-base.template" />\
 <%!
-  from packet.generator.cpp import BuiltInType
+  from packet.types import BuiltInType
 %>\
 <%block name="header">\
 ${parent.header()}
