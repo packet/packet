@@ -22,6 +22,9 @@
       'rule_name': 'packet-gen-cpp',
       'extension': 'packet',
       'message': 'Generating packet for <(RULE_INPUT_NAME)',
+      'dependencies': [
+        '<(packet_pydir)/packet/parser/parser.gyp:packet_generate_parser',
+      ],
       'outputs': [
         '<(packet_output_dir)/<(RULE_INPUT_ROOT).cc',
         '<(packet_output_dir)/<(RULE_INPUT_ROOT).h',

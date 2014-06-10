@@ -22,9 +22,15 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
 import argparse
 import logging
+import os
 import sys
 
-import packet
+try:
+  import packet
+except ImportError:
+  sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../../')
+  import packet
+
 from packet import generator, boot_packet
 from packet.generator import get_generator
 from packet.generator import base
@@ -68,14 +74,14 @@ def main():
 
   lang = args.lang[0]
 
-  LOG.debug('Trying to find the generator for ' + lang)
+  LOG.debug('Trying to find the generator for %s', lang)
   packet_generator_class = get_generator(lang)
 
   if not packet_generator_class:
-    LOG.error('Cannot find the generator for %s' % lang)
+    LOG.error('Cannot find the generator for %s', lang)
     sys.exit(1)
 
-  LOG.debug('Using packet path: %s ' % str(packet.packet_paths))
+  LOG.debug('Using packet path: %s ', str(packet.packet_paths))
 
   opts = {
           base.RECURSIVE_OPT_NAME: args.recursive,

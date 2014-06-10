@@ -8,15 +8,33 @@ install_gyp() {
   popd
 }
 
-error() {
+install_antlr() {
+  pushd .
+  cd tools/antlr/runtime/Python && sudo python setup.py install
+  popd
+}
+
+not_found() {
+  echo "Install $1"
+  exit -1
+}
+
+build_error() {
   echo "Could not generate build files."
   exit -1
 }
 
-# Install gyp if it does not exist.
-hash gyp 2>&- || install_gyp
+# Requirements.
+hash python 2>&- || not_found "python & setup tools"
+hash java 2>&- || not_found "java"
+hash pip 2>&- || not_found "pip"
 
-[[ $? == 0 ]] || error
+# Installations.
+hash gyp 2>&- || install_gyp
+# TODO(soheil): Do it via virtualenv.
+sudo pip install -r requirements.txt
+
+[[ $? == 0 ]] || build_error
 
 echo "Run ./packet_gyp ..."
 
