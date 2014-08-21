@@ -28,7 +28,7 @@
   },
   'targets': [
     {
-      'target_name': 'gen_test_packet',
+      'target_name': 'gen_test_packet_cpp',
       'type': 'none',
       'sources': [
         'simple.packet',
@@ -37,7 +37,7 @@
         '<(packet_output_dir)/including.cc',
       ],
       'includes': [
-        '../packetgen.gypi',
+        '../packetgen_cpp.gypi',
       ],
       'all_dependent_settings': {
         'include_dirs': [
@@ -46,16 +46,34 @@
       },
     },
     {
-      'target_name': 'test_packet',
+      'target_name': 'test_packet_cpp',
       'type': '<(library)',
       'dependencies': [
-        'gen_test_packet',
+        'gen_test_packet_cpp',
         '<(packet_dir)/src/cpp/packet/packet.gyp:packet',
       ],
       'sources': [
         '<(packet_output_dir)/simple.cc',
         '<(packet_output_dir)/including.cc',
       ],
+    },
+    {
+      'target_name': 'gen_test_packet_go',
+      'type': 'none',
+      'sources': [
+        'simple.packet',
+        'including.packet',
+        '<(packet_output_dir)/simple.go',
+        '<(packet_output_dir)/including.go',
+      ],
+      'includes': [
+        '../packetgen_go.gypi',
+      ],
+      'all_dependent_settings': {
+        'include_dirs': [
+          '<(packet_output_dir)/..',
+        ],
+      },
     },
   ],
 }

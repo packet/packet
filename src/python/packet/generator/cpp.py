@@ -27,9 +27,6 @@ from packet import types
 from packet.generator.base import PacketGenerator
 from packet.utils.types import enum
 
-from mako.lookup import TemplateLookup
-
-
 LOG = logging.getLogger('packet.generator.cpp')
 
 __HEADER_SUFFIX = '.h'
@@ -83,12 +80,7 @@ class CppGenerator(PacketGenerator):
     header_file, source_file = _get_output_files(pom, output_dir)
     LOG.debug('Generating C++ code for %s in %s', pom.namespace, output_dir)
 
-    extension_folder = self._get_extension_folder(opts)
-    template_path = extension_folder if extension_folder else []
-    template_path += [self.__get_template_path()]
-
-    template_lookup = TemplateLookup(directories=template_path,
-                                     module_directory='/tmp/mako_modules')
+    template_lookup = self._get_template_lookup(opts)
 
     header_template = template_lookup.get_template('cpp-header.template')
     self.__writeln(header_file,
@@ -101,10 +93,6 @@ class CppGenerator(PacketGenerator):
                    src_template.render(pom=pom, include_prefix='').strip(),
                    True)
     source_file.close()
-
-  def __get_template_path(self):  # pylint: disable=R0201
-    ''' Returns the template repository path. '''
-    return os.path.join(os.path.dirname(__file__), 'templates', 'cpp')
 
   def __writeln(self, output, text='', append_with_a_newline=False):
     ''' Writes a text in the output according to the indentation level.

@@ -1,4 +1,4 @@
-# Copyright (C) 2013, The Cyrus project authors.
+# Copyright (C) 2014, The Cyrus project authors.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,23 +17,29 @@
 #
 
 {
-  'targets': [
+  'rules': [
     {
-      'target_name': 'packet_unittests',
-      'type': 'executable',
+      'rule_name': 'packet-gen-go',
+      'extension': 'packet',
+      'message': 'Generating packet for <(RULE_INPUT_NAME)',
       'dependencies': [
-        'packet.gyp:packet',
-        '<(particle_dir)/particle.gyp:particle_testlib',
-        '<(particle_dir)/particle.gyp:particle_testrunner',
-        '<(packet_dir)/src/packet/test/test.gyp:test_packet_cpp',
+        '<(packet_pydir)/packet/parser/parser.gyp:packet_generate_parser',
       ],
-      'sources': [
-        'internal/vector_test.cc',
-        'channel_test.cc',
-        'packet_test.cc',
-        'vector_test.cc',
+      'outputs': [
+        '<(packet_output_dir)/<(RULE_INPUT_ROOT).go',
+      ],
+      'action': [
+        'python',
+        '<(packet_pydir)/packet/cli/packetgenerator.py',
+        '-l', 'go',
+        '-o', '<(packet_output_dir)',
+        '-p', '<(RULE_INPUT_DIRNAME)',
+        '-r',
+        '-v',
+        '<(RULE_INPUT_NAME)',
       ],
     },
   ],
+ 'process_outputs_as_sources': 1,
+ 'hard_dependency': 1,
 }
-

@@ -34,6 +34,7 @@ packet AnotherSimple(SimpleParent) {
 packet YetAnotherSimple(SimpleParent) {
   @count(simples) int8 s;
   @repeated Simple simples;
+  int8 test;
 }
 
 @type_selector(c = 4)

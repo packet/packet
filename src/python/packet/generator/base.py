@@ -23,11 +23,14 @@ __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 from abc import ABCMeta
 from abc import abstractmethod
 import logging
+import os
 
 from packet.generator.processor import SizeProcessor
 from packet.generator.processor import OffsetProcessor
 from packet.generator.processor import EndianProcessor
 from packet.parser.model import parse_file
+
+from mako.lookup import TemplateLookup
 
 LOG = logging.getLogger('packet.generator.base')
 
@@ -49,6 +52,21 @@ class PacketGenerator(object):
     ''' Returns the extension folder that contain extension templates. '''
     return opts.get(EXTENSION_FOLDER)
 
+  def __get_default_template_path(self):  # pylint: disable=R0201
+    ''' Returns the template repository path. '''
+    return os.path.join(os.path.dirname(__file__), 'templates')
+
+  def _get_template_lookup(self, opts):
+    ''' Returns the mako template lookup object. '''
+    extension_folder = self._get_extension_folder(opts)
+    template_path = extension_folder if extension_folder else []
+    template_path += [self.__get_default_template_path()]
+
+    return TemplateLookup(directories=template_path,
+                          module_directory='/tmp/mako_modules')
+
+
+
   def generate(self, packet_file, output_dir, opts):
     ''' Geneates code based for the packet file.
         Generators: Don't override this method.
@@ -65,7 +83,7 @@ class PacketGenerator(object):
       for step in self._pipeline:
         step.process(pom)
 
-      LOG.info('Generating code from %s ...' % packet_file)
+      LOG.info('Generating code from %s ...', packet_file)
       self.generate_packet(pom, output_dir, opts)
 
       if self._is_recursvie(opts):
