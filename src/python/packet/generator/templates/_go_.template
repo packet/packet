@@ -9,6 +9,7 @@ package ${pom.namespace}
 
 import (
   "encoding/binary"
+  "errors"
 
   "github.com/packet/packet/src/go/packet"
 
@@ -30,22 +31,22 @@ const (
 )
 % endfor
 % for name, packet in pom.packets.iteritems():
-
-func ${self.constructor(packet, pom.namespace)}(b []byte, init bool) *${
-    packet.name} {
+<%
+  ctor = self.constructor(packet, pom.namespace)
+%>\
+func ${ctor}(b []byte, init bool) ${self.type(packet, pom.namespace)} {
   p := ${self.struct_init(packet, pom.namespace, 'b')}
   if init {
     p.Init()
   }
-  return &p
+  return p
 }
-
 
 type ${name} struct {
-  ${self.get_parent(packet, False)}
+  ${self.parent(packet, False)}
 }
 
-func (this *${name}) minSize() int {
+func (this ${name}) minSize() int {
   return ${packet.min_size}
 }
 
@@ -55,17 +56,17 @@ func (this *${name}) Init() {
   % endif
   % if not packet.is_const_size() and packet.get_size_field().packet == packet:
   this.${self.setter(packet.get_size_field())}(${
-      self.get_type(packet.get_size_field().type, pom.namespace)
+      self.type(packet.get_size_field().type, pom.namespace)
       }(this.minSize()))
   % endif
   // Invariants.
   % for field, value in packet.get_type_selector_condition(True):
   this.${self.setter(field)}(${
-      self.get_type(field.type, pom.namespace)}(${value}))
+      self.type(field.type, pom.namespace)}(${value}))
   % endfor
 }
 
-func (this *${name}) Size() int {
+func (this ${name}) Size() int {
   % if packet.is_const_size():
   return ${packet.get_const_size()}
   % else:
@@ -77,25 +78,39 @@ func (this *${name}) Size() int {
     % endif
   % endif
 }
+
+func ConvertTo${name}(p ${self.parent(packet)}) (${
+    self.type(packet, pom.namespace, None, false)}, error) {
+  if !Is${name}(p) {
+    return ${ctor}(nil, false), errors.New("Cannot convert to ${
+        self.type(packet, false)}")
+  }
+
+  return ${ctor}(p.Buf, false), nil
+}
+
+func Is${name}(p ${self.parent(packet)}) bool {
+  return ${self.type_selector_cond(packet, 'p')}
+}
 \
 % for field in packet.fields:
 <%
-getter_type = self.get_type(field.type, pom.namespace, field.repeated_info)
+getter_type = self.type(field.type, pom.namespace, field.repeated_info)
 %>
 func (this *${name}) ${self.getter(field)}() ${getter_type} {
   offset := this.${self.offset(field)}()
   % if field.is_repeated():
+  packet_size := this.Size()
     % if field.get_size_field():
   size := int(this.${self.getter(field.get_size_field())}())
     % else:
-  size := this.Size() - offset
+  size := packet_size - offset
     % endif
     % if field.get_count_field():
   count := int(this.${self.getter(field.get_count_field())}())
     % else:
   count := this.Size() - offset
     % endif
-  packet_size := this.Size()
   % if field.type.is_const_size():
   i := 0
   % endif
@@ -128,13 +143,34 @@ func (this *${name}) ${self.getter(field)}() ${getter_type} {
   % endif
 }
 <%
-if not field.repeated_info or field.repeated_info.count:
-  setter_type = self.get_type(field.type, packet.pom.namespace,
-                              field.repeated_info)
+if field.is_dynamic_repeated():
+  setter_type = self.type(field.type, packet.pom.namespace)
 else:
-  setter_type = self.get_type(field.type, packet.pom.namespace)
+  setter_type = self.type(field.type, packet.pom.namespace, field.repeated_info)
+
+val = field.name[0]
 %>
-func (this *${name}) ${self.setter(field)}(${field.name[0]} ${setter_type}) {
+func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
+  offset := this.${self.offset(field)}()
+  % if field.is_dynamic_repeated():
+    % if isinstance(field.type, BuiltInType):
+  offset += ${field.type.length_in_bytes}
+  size := ${field.type.length_in_bytes}
+    % else:
+  offset += this.${self.field_size(field)}()
+  size := ${val}.Size()
+    % endif
+  this.OpenGap(offset, size)
+  ${self.write_field(field, 'offset', val)}
+\
+  % elif field.is_const_size_repeated():
+  for _, e := range ${val} {
+    ${self.write_field(field, 'offset', 'e')}
+  }
+\
+  % else:
+  ${self.write_field(field, 'offset', val)}
+  % endif
 }
 
 func (this *${name}) ${self.offset(field)}() int {
@@ -177,15 +213,15 @@ func (this *${name}) ${self.field_size(field)}() int {
   % endif
 </%def>\
 \
-<%def name="get_parent(packet, pointer=True)" buffered="True" filter="trim">
+<%def name="parent(packet, pointer=True)" buffered="True" filter="trim">
   % if packet.parent:
-    ${self.get_type(packet.parent, packet.pom.namespace, None, pointer)}
+    ${self.type(packet.parent, packet.pom.namespace, None, pointer)}
   % else:
     packet.Packet
   % endif
 </%def>\
 \
-<%def name="get_type(t, cur_ns, repeated_info=None, pointer=True)"
+<%def name="type(t, cur_ns, repeated_info=None, pointer=False)"
       buffered="True" filter="trim">
   <%
     if isinstance(t, BuiltInType):
@@ -234,7 +270,7 @@ func (this *${name}) ${self.field_size(field)}() int {
 \
 <%def name="read_field(field, offset, res)" buffered="True" filter="trim">
   % if isinstance(field.type, BuiltInType) and field.type.length_in_bytes == 1:
-    ${res} := ${BUILTIN_TYPES[field.type.name]}(this.Buf[offset])
+    ${res} := ${BUILTIN_TYPES[field.type.name]}(this.Buf[${offset}])
   % elif isinstance(field.type, BuiltInType):
     <%
       endian = 'BigEndian' if field.packet.big_endian else 'LittleEndian'
@@ -247,11 +283,44 @@ func (this *${name}) ${self.field_size(field)}() int {
   % endif
 </%def>\
 \
+<%def name="write_field(field, offset, val)" buffered="True" filter="clean_ws">
+  % if isinstance(field.type, BuiltInType) and field.type.length_in_bytes == 1:
+    this.Buf[${offset}] = byte(${val}); offset++
+  % elif isinstance(field.type, BuiltInType):
+    <%
+      endian = 'BigEndian' if field.packet.big_endian else 'LittleEndian'
+      method = 'Put' + BUILTIN_TYPES[field.type.name].capitalize()
+    %>
+    binary.${endian}.${method}(this.Buf[${offset}:], ${val});
+    offset += ${field.type.length_in_bytes}
+  % else:
+    copy(this.Buf[offset:], ${val}.Buf[:${val}.Size()]); offset += ${val}.Size()
+  % endif
+</%def>\
+\
 <%def name="struct_init(p, cur_ns, buf)" buffered="True" filter="trim">
-  <% t = self.get_type(p, cur_ns, None, False) %>
+  <% t = self.type(p, cur_ns, None, False) %>
   % if p.parent:
   ${t}{${self.struct_init(p.parent, cur_ns, buf)}}
   % else:
   ${t}{packet.Packet{Buf: ${buf}}}
   % endif
+</%def>\
+\
+<%!
+  def clean_ws(txt):
+    return ' '.join(txt.strip().split())
+%>
+<%def name="type_selector_cond(packet, var='this')" buffered="True"
+      filter="clean_ws">
+  % if packet.parent:
+    <%
+      conditions = packet.get_type_selector_condition()
+      assert conditions, 'Type selector cannot be empty for %s' % packet.name
+    %>
+    % for field, value in conditions:
+      ${var}.${self.getter(field)}() == ${value} &&
+    % endfor
+  % endif
+  true
 </%def>\

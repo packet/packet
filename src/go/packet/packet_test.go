@@ -13,7 +13,11 @@ func TestSimplePacket(t *testing.T) {
 		t.Errorf("Size of this simple must be 0 instead of %d.", pkt.Size())
 	}
 
-	buf[0] = 1
+	pkt.SetX(1)
+	if pkt.X() != 1 {
+		t.Errorf("X of this simple packet is set to 1 not %d.", pkt.X())
+	}
+
 	if pkt.Size() != 1 {
 		t.Errorf("Size of this simple must be 1 instead of %d.", pkt.Size())
 	}
