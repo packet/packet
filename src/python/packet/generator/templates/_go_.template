@@ -213,7 +213,7 @@ func (this *${name}) ${self.field_size(field)}() int {
   % endif
 </%def>\
 \
-<%def name="parent(packet, pointer=True)" buffered="True" filter="trim">
+<%def name="parent(packet, pointer=False)" buffered="True" filter="trim">
   % if packet.parent:
     ${self.type(packet.parent, packet.pom.namespace, None, pointer)}
   % else:
