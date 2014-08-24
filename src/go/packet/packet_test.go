@@ -139,3 +139,16 @@ func TestWriteSizedArray(t *testing.T) {
 		t.Errorf("Packet size is not updated after adding entries to the array.")
 	}
 }
+
+func TestBigEndian(t *testing.T) {
+	buf := []byte{0, 1}
+	pkt := including.NewBigEndianPacketWithBuf(buf)
+	if pkt.A() != 1 {
+		t.Errorf("The big-endian field is %d instead of 1.", pkt.A())
+	}
+
+	pkt.SetA(0x100)
+	if pkt.Buf[0] != 1 || pkt.Buf[1] != 0 {
+		t.Errorf("The big endian field is set to %d instead of 0x100.", pkt.A())
+	}
+}
