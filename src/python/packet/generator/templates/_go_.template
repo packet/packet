@@ -31,14 +31,19 @@ const (
 )
 % endfor
 % for name, packet in pom.packets.iteritems():
+
 <%
-  ctor = self.constructor(packet, pom.namespace)
+  ctor = self.slice_constructor(packet, pom.namespace)
 %>\
-func ${ctor}(b []byte, init bool) ${self.type(packet, pom.namespace)} {
+func ${ctor}(b []byte) ${self.type(packet, pom.namespace)} {
+  return ${self.struct_init(packet, pom.namespace, 'b')}
+}
+
+func ${self.default_constructor(packet, pom.namespace)}() ${
+    self.type(packet, pom.namespace)} {
+  b := make([]byte, ${packet.min_size})
   p := ${self.struct_init(packet, pom.namespace, 'b')}
-  if init {
-    p.Init()
-  }
+  p.Init()
   return p
 }
 
@@ -54,7 +59,7 @@ func (this *${name}) Init() {
   % if packet.parent:
   this.${packet.parent.name}.Init()
   % endif
-  % if not packet.is_const_size() and packet.get_size_field().packet == packet:
+  % if packet.get_size_field():
   this.${self.setter(packet.get_size_field())}(${
       self.type(packet.get_size_field().type, pom.namespace)
       }(this.minSize()))
@@ -82,11 +87,11 @@ func (this ${name}) Size() int {
 func ConvertTo${name}(p ${self.parent(packet)}) (${
     self.type(packet, pom.namespace, None, false)}, error) {
   if !Is${name}(p) {
-    return ${ctor}(nil, false), errors.New("Cannot convert to ${
+    return ${ctor}(nil), errors.New("Cannot convert to ${
         self.type(packet, false)}")
   }
 
-  return ${ctor}(p.Buf, false), nil
+  return ${ctor}(p.Buf), nil
 }
 
 func Is${name}(p ${self.parent(packet)}) bool {
@@ -161,7 +166,17 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   size := ${val}.Size()
     % endif
   this.OpenGap(offset, size)
+  this.${self.setter(packet.get_size_field())}(${
+      BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
   ${self.write_field(field, 'offset', val)}
+  % if field.get_count_field():
+  count := this.${self.getter(field.get_count_field())}()
+  this.${self.setter(field.get_count_field())}(count + 1)
+  % elif field.get_size_field():
+  this.${self.setter(field.get_size_field())}(this.${
+      self.getter(field.get_size_field())}() + ${
+      BUILTIN_TYPES[field.get_size_field().type.name]}(size))
+  % endif
 \
   % elif field.is_const_size_repeated():
   for _, e := range ${val} {
@@ -205,7 +220,15 @@ func (this *${name}) ${self.field_size(field)}() int {
 % endfor
 </%block>\
 \
-<%def name="constructor(packet, cur_ns)" buffered="True" filter="trim">
+<%def name="slice_constructor(packet, cur_ns)" buffered="True" filter="trim">
+  % if cur_ns == packet.pom.namespace:
+    New${packet.name}WithBuf
+  % else:
+    ${packet.pom.namespace}.New${packet.name}WithBuf
+  % endif
+</%def>\
+\
+<%def name="default_constructor(packet, cur_ns)" buffered="True" filter="trim">
   % if cur_ns == packet.pom.namespace:
     New${packet.name}
   % else:
@@ -278,8 +301,8 @@ func (this *${name}) ${self.field_size(field)}() int {
     %>
     ${res} := binary.${endian}.${method}(this.Buf[${offset}:])
   % else:
-    ${res} := ${self.constructor(field.type, field.packet.pom.namespace)
-        }(this.Buf[${offset}:], false)
+    ${res} := ${self.slice_constructor(field.type, field.packet.pom.namespace)
+        }(this.Buf[${offset}:])
   % endif
 </%def>\
 \

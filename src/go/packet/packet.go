@@ -24,6 +24,7 @@ func (p *Packet) OpenGap(offset, size int) {
 		// This can result into a buffer with more than twice the requested size.
 		b := make([]byte, len(p.Buf), cap(p.Buf)+(offset+size)*2)
 		copy(b, p.Buf)
+		p.Buf = b
 	}
 
 	if len(p.Buf) < offset+size {
