@@ -41,7 +41,13 @@ func ${ctor}(b []byte) ${self.type(packet, pom.namespace)} {
 
 func ${self.default_constructor(packet, pom.namespace)}() ${
     self.type(packet, pom.namespace)} {
-  b := make([]byte, ${packet.min_size})
+  % if packet.get_padding_info():
+  s := packet.PaddedSize(${packet.min_size}, ${
+                         packet.get_padding_info().multiple})
+  % else:
+  s := ${packet.min_size}
+  % endif
+  b := make([]byte, s)
   p := ${self.struct_init(packet, pom.namespace, 'b')}
   p.Init()
   return p
@@ -169,20 +175,33 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   this.${self.setter(packet.get_size_field())}(${
       BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
   ${self.write_field(field, 'offset', val)}
-  % if field.get_count_field():
+    % if field.get_count_field():
   count := this.${self.getter(field.get_count_field())}()
   this.${self.setter(field.get_count_field())}(count + 1)
-  % elif field.get_size_field():
+    % elif field.get_size_field():
   this.${self.setter(field.get_size_field())}(this.${
       self.getter(field.get_size_field())}() + ${
       BUILTIN_TYPES[field.get_size_field().type.name]}(size))
-  % endif
+    % endif
 \
   % elif field.is_const_size_repeated():
   for _, e := range ${val} {
     ${self.write_field(field, 'offset', 'e')}
   }
 \
+  % elif not field.has_const_size() and not field.is_repeated():
+  if this.${self.field_size(field)}() != 0 {
+    panic("Repeated field ${field.name} is already set.")
+  }
+  size := ${val}.Size()
+  this.${self.setter(packet.get_size_field())}(${
+      BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
+  this.OpenGap(offset, size)
+  ${self.write_field(field, 'offset', val)}
+  % elif packet.is_padded() and not packet.get_padding_info().excluded and packet.get_size_field() == field:
+  ${val} = ${BUILTIN_TYPES[field.type.name]}(packet.PaddedSize(int(${val}), ${
+      packet.get_padding_info().multiple}))
+  ${self.write_field(field, 'offset', val)}
   % else:
   ${self.write_field(field, 'offset', val)}
   % endif
@@ -199,6 +218,10 @@ func (this *${name}) ${self.offset(field)}() int {
   % if not field.has_const_size():
 func (this *${name}) ${self.field_size(field)}() int {
     % if not field.is_repeated():
+  offset := this.${self.offset(field)}()
+  if offset >= this.Size() {
+    return 0
+  }
   return this.${self.getter(field)}().Size()
     % elif field.get_size_field():
   return int(this.${self.getter(field.get_size_field())}())

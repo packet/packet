@@ -152,3 +152,54 @@ func TestBigEndian(t *testing.T) {
 		t.Errorf("The big endian field is set to %d instead of 0x100.", pkt.A())
 	}
 }
+
+func TestPadded(t *testing.T) {
+	padded := simple.NewPadded()
+	if padded.Size() != 8 {
+		t.Errorf("Padded's size is not padded to 8: %v.", padded.Size())
+	}
+
+	if padded.Len() != 8 {
+		t.Errorf("Padded's size field is not padded to 8: %v.", padded.Len())
+	}
+
+	paddex := simple.NewPaddedExcluded()
+	if paddex.Size() != 8 {
+		t.Errorf("Paddex's size is not padded to 8: %v.", padded.Size())
+	}
+
+	if paddex.Len() != 1 {
+		t.Errorf("Paddex's size field is padded to 8: %v.", padded.Len())
+	}
+
+	pkt := simple.NewPaddedIncluder()
+	if pkt.Size() != 1 {
+		t.Errorf("Padded includer's size is incorrect: %v.", pkt.Size())
+	}
+
+	pkt.SetPadded(padded)
+
+	padded = pkt.Padded()
+	if padded.Len() != 8 {
+		t.Errorf("Padded length field is not updated: %v.", padded.Len())
+	}
+
+	if pkt.Size() != 9 {
+		t.Errorf(
+			"Packet's size is not correctly updated after added the padded field: %v",
+			pkt.Size())
+	}
+
+	pkt.SetPaddedExcluded(paddex)
+
+	paddex = pkt.PaddedExcluded()
+	if paddex.Len() != 1 {
+		t.Errorf("Padded excluded's size is incorrect: %v", paddex.Len())
+	}
+
+	if pkt.Size() != 17 {
+		t.Errorf(
+			"Packet's size is not correctly updated after added the padded field: %v",
+			pkt.Size())
+	}
+}
