@@ -1,23 +1,35 @@
-// This package implements the basic runtime utilies for packets.
 package packet
 
 import "fmt"
 
-type Packet struct {
-	Buf []byte
+// SizedBuffer is a buffer that has a specific size. All packets are Sized.
+type SizedBuffer interface {
+	Size() int
+	Buffer() []byte
 }
 
-// Returns the size of this packet. This method is always overriden by the real
-// packets.
+// Packet is the parent structure of all packets.
+type Packet struct {
+	Buf []byte // The underlying buffer of the packet.
+}
+
+// Size returns the size of this packet. This method is always overriden by the
+// real packets.
 func (p *Packet) Size() int {
 	return len(p.Buf)
 }
 
+// Buffer returns the underlying buffer of this packet.
+func (p *Packet) Buffer() []byte {
+	return p.Buf
+}
+
+// OpenGap opens an space of "size" bytes in the packet buffer at the "offset".
 func (p *Packet) OpenGap(offset, size int) {
-	p_size := p.Size()
-	if p_size < offset {
+	pSize := p.Size()
+	if pSize < offset {
 		panic(fmt.Sprintf("Offset (%d) is larger than the size (%d)", offset,
-			p_size))
+			pSize))
 	}
 
 	if cap(p.Buf) < offset+size {
@@ -31,14 +43,14 @@ func (p *Packet) OpenGap(offset, size int) {
 		p.Buf = p.Buf[:offset+size]
 	}
 
-	if p_size == offset {
+	if pSize == offset {
 		return
 	}
 
 	copy(p.Buf[offset:], p.Buf[offset+size:])
 }
 
-// Returns the size padded to the given multiple.
+// PaddedSize returns the size padded to the given multiple.
 func PaddedSize(size int, multiple int) int {
 	if multiple == 0 {
 		return size

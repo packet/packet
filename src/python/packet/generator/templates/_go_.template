@@ -81,6 +81,10 @@ func (this ${name}) Size() int {
   % if packet.is_const_size():
   return ${packet.get_const_size()}
   % else:
+  if len(this.Buf) < this.minSize() {
+    return 0
+  }
+
   size := int(this.${self.getter(packet.get_size_field())}())
     % if not packet.is_padded():
   return size
