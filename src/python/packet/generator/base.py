@@ -36,8 +36,9 @@ LOG = logging.getLogger('packet.generator.base')
 
 RECURSIVE_OPT_NAME = 'recursive'
 EXTENSION_FOLDER = 'extension_folder'
+INCLUDE_PREFIX_OPT_NAME = 'include_prefix'
 
-class PacketGenerator(object):
+class PacketGenerator(object):  # pylint: disable=all
   ''' The base class for all genrerators. All packet code generators must
       extend this class. '''
   __metaclass__ = ABCMeta

@@ -56,6 +56,8 @@ def parse_args():
                       help='the packet path.')
   parser.add_argument('-r', '--recursive', action='store_true',
                       help='generate codes for all included packets.')
+  parser.add_argument('-x', '--include_prefix', type=str, nargs=1,
+                      help='include prefix for generated code.')
   parser.add_argument('-v', '--verbose', action='store_true',
                       help='verbose logging.')
   parser.add_argument('--version', action='version', version='%(prog)s 2.0')
@@ -86,6 +88,7 @@ def main():
   opts = {
           base.RECURSIVE_OPT_NAME: args.recursive,
           base.EXTENSION_FOLDER: args.extension,
+          base.INCLUDE_PREFIX_OPT_NAME: args.include_prefix,
           }
 
   packet_generator = packet_generator_class()

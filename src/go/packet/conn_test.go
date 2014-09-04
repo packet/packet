@@ -63,20 +63,18 @@ func connect(addr string, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pc := NewConn(nc, testPktCtor)
-	pkt1 := simple.NewSimple()
-	pkt2 := simple.NewSimple()
-	pkts := []interface{}{
-		&pkt1,
-		&pkt2,
+	pc := simple.NewSimpleConn(nc)
+	pkts := []simple.Simple{
+		simple.NewSimple(),
+		simple.NewSimple(),
 	}
 
 	if err := pc.Write(pkts); err != nil {
 		t.Fatal(err)
 	}
 
-	pkts[0] = nil
-	pkts[1] = nil
+	pkts[0].SetX(0)
+	pkts[1].SetX(0)
 
 	read := 0
 	for read < 2 {
@@ -92,7 +90,7 @@ func connect(addr string, t *testing.T) {
 		t.Errorf("Cannot read %d packets instead of 2 packets", read)
 	}
 
-	if pkts[0].(SizedBuffer).Size() != 1 || pkts[1].(SizedBuffer).Size() != 1 {
+	if pkts[0].Size() != 1 || pkts[1].Size() != 1 {
 		t.Errorf("Invalid packets received.")
 	}
 

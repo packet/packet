@@ -24,6 +24,7 @@ import logging
 import os.path
 
 from packet.generator.base import PacketGenerator
+from packet.generator.base import INCLUDE_PREFIX_OPT_NAME
 from packet import types
 
 LOG = logging.getLogger('packet.generator.go')
@@ -41,6 +42,7 @@ BUILTIN_TYPES = {
   types.UNSIGNED_INT_32.name: 'uint32',
   types.UNSIGNED_INT_64.name: 'uint64',
 }
+
 
 def _get_output_file(pom, output_dir):
   ''' Returns the go output file for this packet object model. '''
@@ -65,6 +67,8 @@ class GoGenerator(PacketGenerator):
     template_lookup = self._get_template_lookup(opts)
 
     template = template_lookup.get_template('go.template')
-    src_file.write(template.render(pom=pom, include_prefix='').strip())
+    src_file.write(template.render(pom=pom,
+                                   include_prefix=opts.get(
+                                       INCLUDE_PREFIX_OPT_NAME)).strip())
     src_file.close()
 

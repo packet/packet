@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defaultBufSize = 1 << 12
+	DefaultBufSize = 1 << 12
 )
 
 // Conn is a simple wrapper around net.Conn that can read and write packets.
@@ -25,7 +25,7 @@ func NewConn(c net.Conn, f Constructor) Conn {
 	return Conn{
 		Conn: c,
 		ctor: f,
-		buf:  make([]byte, defaultBufSize),
+		buf:  make([]byte, DefaultBufSize),
 	}
 }
 
@@ -52,6 +52,17 @@ func (c *Conn) Write(pkts []interface{}) error {
 
 // Read reads packets from the connection.
 func (c *Conn) Read(pkts []interface{}) (int, error) {
+	if len(c.buf) == c.offset {
+		newSize := DefaultBufSize
+		if DefaultBufSize < len(c.buf) {
+			newSize = 2 * len(c.buf)
+		}
+
+		buf := make([]byte, newSize)
+		copy(buf, c.buf[:c.offset])
+		c.buf = buf
+	}
+
 	r, err := c.Conn.Read(c.buf[c.offset:])
 	if err != nil {
 		return 0, err
@@ -87,7 +98,7 @@ func (c *Conn) Read(pkts []interface{}) (int, error) {
 		return n, nil
 	}
 
-	buf := make([]byte, defaultBufSize)
+	buf := make([]byte, DefaultBufSize)
 	copy(buf, c.buf[:c.offset])
 	c.buf = buf
 	return n, nil
