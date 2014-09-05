@@ -32,7 +32,7 @@ LOG = logging.getLogger('packet.generator.go')
 __GO_SUFFIX = '.go'
 
 BUILTIN_TYPES = {
-  types.CHAR.name: 'int8',
+  types.CHAR.name: 'byte',
   types.INT_8.name: 'int8',
   types.INT_16.name: 'int16',
   types.INT_32.name: 'int32',

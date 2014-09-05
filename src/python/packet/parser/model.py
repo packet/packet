@@ -180,7 +180,7 @@ class PacketObjectModel(object):  # pylint: disable=R0903
     enum_name = '.'.join(enum_reference[-3:-1])
     enum = self.find_enum(enum_name)
     if not enum:
-      LOG.warn('Enum not found %s' % enum_name)
+      LOG.warn('Enum not found %s', enum_name)
       return None
     return enum.items.get(enum_reference[-1])
 
@@ -191,7 +191,7 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       return None
 
     if name.find('.') == -1:
-      LOG.debug('Finding %s in %s' % (name, self.namespace))
+      LOG.debug('Finding %s in %s', name, self.namespace)
       return self.packets.get(name) or self.enums.get(name)
     else:
       # TODO(soheil): Just one level of namespaces?
@@ -199,11 +199,11 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       type_name = name.split('.')[-1]
 
       if namespace == self.namespace:
-        LOG.debug('Finding %s in %s' % (name, namespace))
+        LOG.debug('Finding %s in %s', name, namespace)
         return self.packets.get(type_name) or self.enums.get(type_name)
 
       namespace_pom = self.includes.get(namespace)
-      assert namespace_pom, ('Namespace not found %s' % namespace_pom)
+      assert namespace_pom, ('Namespace not found %s' % namespace)
       return namespace_pom.find_type(type_name)
 
 class Enum(object):  # pylint: disable=R0903

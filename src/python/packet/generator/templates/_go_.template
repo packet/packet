@@ -8,9 +8,11 @@
 package ${pom.namespace}
 
 import (
+  "bytes"
   "encoding/binary"
   "errors"
   "fmt"
+  "io"
   "net"
 
   "github.com/packet/packet/src/go/packet"
@@ -69,6 +71,16 @@ type ${name} struct {
 
 func (this ${name}) minSize() int {
   return ${packet.min_size}
+}
+
+func (this ${name}) Clone() (${name}, error) {
+  var newBuf bytes.Buffer
+  _, err := io.CopyN(&newBuf, bytes.NewBuffer(this.Buf), int64(this.Size()))
+  if err != nil {
+    return ${self.default_constructor(packet, pom.namespace)}(), err
+  }
+
+  return ${ctor}(newBuf.Bytes()), nil
 }
 
 type ${name}Conn struct {
@@ -183,7 +195,7 @@ func (this ${name}) Size() int {
   % endif
 }
 
-func ConvertTo${name}(p ${self.parent(packet)}) (${
+func To${name}(p ${self.parent(packet)}) (${
     self.type(packet, pom.namespace, None, false)}, error) {
   if !Is${name}(p) {
     return ${ctor}(nil), errors.New("Cannot convert to ${
@@ -212,12 +224,14 @@ func (this *${name}) ${self.getter(field)}() ${getter_type} {
     % endif
     % if field.get_count_field():
   count := int(this.${self.getter(field.get_count_field())}())
+    % elif field.is_const_size_repeated():
+  count := ${field.repeated_info.count}
     % else:
   count := this.Size() - offset
     % endif
-  % if field.type.is_const_size():
+    % if field.is_const_size_repeated():
   i := 0
-  % endif
+    % endif
   var res ${getter_type}
   for size > 0 && count > 0 && packet_size > offset {
     ${self.read_field(field, 'offset', 'elem')}
@@ -226,14 +240,16 @@ func (this *${name}) ${self.getter(field)}() ${getter_type} {
       break
     }
     size -= ${field.type.length_in_bytes}
+    offset += ${field.type.length_in_bytes}
     % else:
     if elem.Size() > size {
       break
     }
     size -= elem.Size()
+    offset += elem.Size()
     % endif
     count--
-    % if field.type.is_const_size():
+    % if field.is_const_size_repeated():
     res[i] = elem
     i++
     % else:
