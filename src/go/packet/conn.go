@@ -73,7 +73,7 @@ func (c *Conn) Read(pkts []interface{}) (int, error) {
 	s := 0
 	n := 0
 	for i := range pkts {
-		p, err := c.ctor(c.buf)
+		p, err := c.ctor(c.buf[s:])
 		if err != nil {
 			break
 		}
@@ -94,12 +94,5 @@ func (c *Conn) Read(pkts []interface{}) (int, error) {
 	}
 
 	c.buf = c.buf[s:]
-	if c.offset < len(c.buf) {
-		return n, nil
-	}
-
-	buf := make([]byte, DefaultBufSize)
-	copy(buf, c.buf[:c.offset])
-	c.buf = buf
 	return n, nil
 }

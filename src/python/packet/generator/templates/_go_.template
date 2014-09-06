@@ -134,7 +134,7 @@ func (c *${name}Conn) Read(pkts []${name}) (int, error) {
   s := 0
   n := 0
   for i := range pkts {
-    p := ${ctor}(c.buf)
+    p := ${ctor}(c.buf[s:])
 
     pSize := p.Size()
     if r < s+pSize {
@@ -152,13 +152,6 @@ func (c *${name}Conn) Read(pkts []${name}) (int, error) {
   }
 
   c.buf = c.buf[s:]
-  if c.offset < len(c.buf) {
-    return n, nil
-  }
-
-  buf := make([]byte, packet.DefaultBufSize)
-  copy(buf, c.buf[:c.offset])
-  c.buf = buf
   return n, nil
 }
 
@@ -273,11 +266,10 @@ val = field.name[0]
 func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   offset := this.${self.offset(field)}()
   % if field.is_dynamic_repeated():
+  offset += this.${self.field_size(field)}()
     % if isinstance(field.type, BuiltInType):
-  offset += ${field.type.length_in_bytes}
   size := ${field.type.length_in_bytes}
     % else:
-  offset += this.${self.field_size(field)}()
   size := ${val}.Size()
     % endif
   this.OpenGap(offset, size)
