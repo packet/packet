@@ -96,23 +96,41 @@ func New${name}Conn(c net.Conn) ${name}Conn {
   }
 }
 
-func (c *${name}Conn) Write(pkts []${name}) error {
+func (c *${name}Conn) WritePacket(pkt ${name}) error {
+  s := pkt.Size()
+  b := pkt.Buffer()[:s]
+  n := 0
+  for s > 0 {
+    var err error
+    if n, err = c.Conn.Write(b); err != nil {
+      return fmt.Errorf("Error in write: %v", err)
+    }
+    s -= n
+  }
+
+  return nil
+}
+
+func (c *${name}Conn) WritePackets(pkts []${name}) error {
   for _, p := range pkts {
-    s := p.Size()
-    b := p.Buffer()[:s]
-    n := 0
-    for s > 0 {
-      var err error
-      if n, err = c.Conn.Write(b); err != nil {
-        return fmt.Errorf("Error in write: %v", err)
-      }
-      s -= n
+    if err := c.WritePacket(p); err != nil {
+      return err
     }
   }
   return nil
 }
 
-func (c *${name}Conn) Read(pkts []${name}) (int, error) {
+func (c *${name}Conn) ReadPacket() (${name}, error) {
+  pkts := make([]${name}, 1)
+  _, err := c.ReadPackets(pkts)
+  if err != nil {
+    return ${self.default_constructor(packet, pom.namespace)}(), err
+  }
+
+  return pkts[0], nil
+}
+
+func (c *${name}Conn) ReadPackets(pkts []${name}) (int, error) {
   if len(c.buf) == c.offset {
     newSize := packet.DefaultBufSize
     if newSize < len(c.buf) {
@@ -137,7 +155,7 @@ func (c *${name}Conn) Read(pkts []${name}) (int, error) {
     p := ${ctor}(c.buf[s:])
 
     pSize := p.Size()
-    if r < s+pSize {
+    if pSize == 0 || r < s+pSize {
       break
     }
 

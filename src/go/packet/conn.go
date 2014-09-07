@@ -79,7 +79,7 @@ func (c *Conn) Read(pkts []interface{}) (int, error) {
 		}
 
 		pSize := p.Size()
-		if r < s+pSize {
+		if pSize == 0 || r < s+pSize {
 			break
 		}
 

@@ -31,7 +31,7 @@ func TestPolymorphism(t *testing.T) {
 		t.Error("Simple parent should be converatble to including.")
 	}
 
-	inc, err := including.ConvertToIncluding(par)
+	inc, err := including.ToIncluding(par)
 	if err != nil {
 		t.Error(err)
 	}
