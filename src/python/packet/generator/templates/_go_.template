@@ -96,7 +96,7 @@ func New${name}Conn(c net.Conn) ${name}Conn {
   }
 }
 
-func (c *${name}Conn) WritePacket(pkt ${name}) error {
+func (c *${name}Conn) Write${name}(pkt ${name}) error {
   s := pkt.Size()
   b := pkt.Buffer()[:s]
   n := 0
@@ -111,18 +111,18 @@ func (c *${name}Conn) WritePacket(pkt ${name}) error {
   return nil
 }
 
-func (c *${name}Conn) WritePackets(pkts []${name}) error {
+func (c *${name}Conn) Write${name}s(pkts []${name}) error {
   for _, p := range pkts {
-    if err := c.WritePacket(p); err != nil {
+    if err := c.Write${name}(p); err != nil {
       return err
     }
   }
   return nil
 }
 
-func (c *${name}Conn) ReadPacket() (${name}, error) {
+func (c *${name}Conn) Read${name}() (${name}, error) {
   pkts := make([]${name}, 1)
-  _, err := c.ReadPackets(pkts)
+  _, err := c.Read${name}s(pkts)
   if err != nil {
     return ${self.default_constructor(packet, pom.namespace)}(), err
   }
@@ -130,7 +130,7 @@ func (c *${name}Conn) ReadPacket() (${name}, error) {
   return pkts[0], nil
 }
 
-func (c *${name}Conn) ReadPackets(pkts []${name}) (int, error) {
+func (c *${name}Conn) Read${name}s(pkts []${name}) (int, error) {
   if len(c.buf) == c.offset {
     newSize := packet.DefaultBufSize
     if newSize < len(c.buf) {

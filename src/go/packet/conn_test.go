@@ -69,7 +69,7 @@ func connect(addr string, t *testing.T) {
 		simple.NewSimple(),
 	}
 
-	if err := pc.WritePackets(pkts); err != nil {
+	if err := pc.WriteSimples(pkts); err != nil {
 		t.Fatal(err)
 	}
 
@@ -78,7 +78,7 @@ func connect(addr string, t *testing.T) {
 
 	read := 0
 	for read < 2 {
-		n, err := pc.ReadPackets(pkts[read:])
+		n, err := pc.ReadSimples(pkts[read:])
 		if err != nil {
 			break
 		}
