@@ -8,6 +8,7 @@
 package ${pom.namespace}
 
 import (
+  "bufio"
   "bytes"
   "encoding/binary"
   "errors"
@@ -85,13 +86,15 @@ func (this ${name}) Clone() (${name}, error) {
 
 type ${name}Conn struct {
   net.Conn
-  buf []byte
+  w      *bufio.Writer
+  buf    []byte
   offset int
 }
 
 func New${name}Conn(c net.Conn) ${name}Conn {
   return ${name}Conn {
     Conn: c,
+		w: bufio.NewWriter(c),
     buf: make([]byte, packet.DefaultBufSize),
   }
 }
@@ -102,7 +105,7 @@ func (c *${name}Conn) Write${name}(pkt ${name}) error {
   n := 0
   for s > 0 {
     var err error
-    if n, err = c.Conn.Write(b); err != nil {
+    if n, err = c.w.Write(b); err != nil {
       return fmt.Errorf("Error in write: %v", err)
     }
     s -= n
@@ -118,6 +121,10 @@ func (c *${name}Conn) Write${name}s(pkts []${name}) error {
     }
   }
   return nil
+}
+
+func (c *${name}Conn) Flush() error {
+  return c.w.Flush()
 }
 
 func (c *${name}Conn) Read${name}() (${name}, error) {
