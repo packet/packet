@@ -180,7 +180,7 @@ func (c *${name}Conn) Read${name}s(pkts []${name}) (int, error) {
   return n, nil
 }
 
-func (this *${name}) Init() {
+func (this ${name}) Init() {
   % if packet.parent:
   this.${packet.parent.name}.Init()
   % endif
@@ -231,7 +231,7 @@ func Is${name}(p ${self.parent(packet)}) bool {
 <%
 getter_type = self.type(field.type, pom.namespace, field.repeated_info)
 %>
-func (this *${name}) ${self.getter(field)}() ${getter_type} {
+func (this ${name}) ${self.getter(field)}() ${getter_type} {
   offset := this.${self.offset(field)}()
   % if field.is_repeated():
   packet_size := this.Size()
@@ -288,7 +288,7 @@ else:
 
 val = field.name[0]
 %>
-func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
+func (this ${name}) ${self.setter(field)}(${val} ${setter_type}) {
   offset := this.${self.offset(field)}()
   % if field.is_dynamic_repeated():
   offset += this.${self.field_size(field)}()
@@ -300,7 +300,7 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   this.OpenGap(offset, size)
   this.${self.setter(packet.get_size_field())}(${
       BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
-  ${self.write_field(field, 'offset', val)}
+  ${self.write_field(field, 'offset', val, 'size')}
     % if field.get_count_field():
   count := this.${self.getter(field.get_count_field())}()
   this.${self.setter(field.get_count_field())}(count + 1)
@@ -333,7 +333,7 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   % endif
 }
 
-func (this *${name}) ${self.offset(field)}() int {
+func (this ${name}) ${self.offset(field)}() int {
   offset := ${field.offset[0]}
   % for offset_field in field.offset[1]:
   offset += this.${self.field_size(offset_field)}()
@@ -342,7 +342,7 @@ func (this *${name}) ${self.offset(field)}() int {
 }
 
   % if not field.has_const_size():
-func (this *${name}) ${self.field_size(field)}() int {
+func (this ${name}) ${self.field_size(field)}() int {
     % if not field.is_repeated():
   offset := this.${self.offset(field)}()
   if offset >= this.Size() {
@@ -455,7 +455,8 @@ func (this *${name}) ${self.field_size(field)}() int {
   % endif
 </%def>\
 \
-<%def name="write_field(field, offset, val)" buffered="True" filter="clean_ws">
+<%def name="write_field(field, offset, val, size=None)" buffered="True"
+      filter="clean_ws">
   % if isinstance(field.type, BuiltInType) and field.type.length_in_bytes == 1:
     this.Buf[${offset}] = byte(${val}); offset++
   % elif isinstance(field.type, BuiltInType):
@@ -466,7 +467,11 @@ func (this *${name}) ${self.field_size(field)}() int {
     binary.${endian}.${method}(this.Buf[${offset}:], ${val});
     offset += ${field.type.length_in_bytes}
   % else:
+    % if size == None:
     copy(this.Buf[offset:], ${val}.Buf[:${val}.Size()]); offset += ${val}.Size()
+    % else:
+    copy(this.Buf[offset:], ${val}.Buf[:${size}]); offset += ${size}
+    % endif
   % endif
 </%def>\
 \
