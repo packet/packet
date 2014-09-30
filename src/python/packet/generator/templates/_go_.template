@@ -180,7 +180,7 @@ func (c *${name}Conn) Read${name}s(pkts []${name}) (int, error) {
   return n, nil
 }
 
-func (this ${name}) Init() {
+func (this *${name}) Init() {
   % if packet.parent:
   this.${packet.parent.name}.Init()
   % endif
@@ -288,7 +288,7 @@ else:
 
 val = field.name[0]
 %>
-func (this ${name}) ${self.setter(field)}(${val} ${setter_type}) {
+func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   offset := this.${self.offset(field)}()
   % if field.is_dynamic_repeated():
   offset += this.${self.field_size(field)}()
