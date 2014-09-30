@@ -233,7 +233,18 @@ getter_type = self.type(field.type, pom.namespace, field.repeated_info)
 %>
 func (this ${name}) ${self.getter(field)}() ${getter_type} {
   offset := this.${self.offset(field)}()
-  % if field.is_repeated():
+  % if field.is_repeated() and not field.is_const_size_repeated() and\
+       isinstance(field.type, BuiltInType) and field.type.length_in_bytes == 1:
+  packet_size := this.Size()
+    % if field.get_size_field():
+  size := int(this.${self.getter(field.get_size_field())}())
+    % elif field.get_count_field():
+  size := int(this.${self.getter(field.get_count_field())}())
+    % else:
+  size := packet_size - offset
+    % endif
+  return ${getter_type}(this.Buf[offset:offset+size])
+  % elif field.is_repeated():
   packet_size := this.Size()
     % if field.get_size_field():
   size := int(this.${self.getter(field.get_size_field())}())
@@ -297,7 +308,7 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
     % else:
   size := ${val}.Size()
     % endif
-  this.OpenGap(offset, size)
+  this.OpenGap(offset, size, this.Size())
   this.${self.setter(packet.get_size_field())}(${
       BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
   ${self.write_field(field, 'offset', val, 'size')}
@@ -322,7 +333,7 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   size := ${val}.Size()
   this.${self.setter(packet.get_size_field())}(${
       BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
-  this.OpenGap(offset, size)
+  this.OpenGap(offset, size, this.Size())
   ${self.write_field(field, 'offset', val)}
   % elif packet.is_padded() and not packet.get_padding_info().excluded and packet.get_size_field() == field:
   ${val} = ${BUILTIN_TYPES[field.type.name]}(packet.PaddedSize(int(${val}), ${

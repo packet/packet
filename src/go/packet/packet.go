@@ -24,17 +24,18 @@ func (p *Packet) Buffer() []byte {
 	return p.Buf
 }
 
-// OpenGap opens an space of "size" bytes in the packet buffer at the "offset".
-func (p *Packet) OpenGap(offset, size int) {
-	pSize := p.Size()
-	if pSize < offset {
+// OpenGap opens an space of size bytes in the packet buffer at the offset.
+// packetSize is actual size of the packet (not the length of the underlying
+// buffer) and must be passed to the function.
+func (p *Packet) OpenGap(offset, size, packetSize int) {
+	if packetSize < offset {
 		panic(fmt.Sprintf("Offset (%d) is larger than the size (%d)", offset,
-			pSize))
+			packetSize))
 	}
 
-	if cap(p.Buf) < pSize+size {
+	if cap(p.Buf) < packetSize+size {
 		// This can result into a buffer with more than twice the requested size.
-		b := make([]byte, len(p.Buf), cap(p.Buf)+(pSize+size)*2)
+		b := make([]byte, len(p.Buf), cap(p.Buf)+(packetSize+size)*2)
 		copy(b, p.Buf)
 		p.Buf = b
 	}
@@ -43,7 +44,7 @@ func (p *Packet) OpenGap(offset, size int) {
 		p.Buf = p.Buf[:offset+size]
 	}
 
-	if pSize == offset {
+	if packetSize == offset {
 		return
 	}
 
