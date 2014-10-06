@@ -188,6 +188,8 @@ func (this *${name}) Init() {
   this.${self.setter(packet.get_size_field())}(${
       self.type(packet.get_size_field().type, pom.namespace)
       }(this.minSize()))
+  % elif packet.is_custom_sized():
+  this.SetSize(this.minSize())
   % endif
   // Invariants.
   % for field, value in packet.get_type_selector_condition(True):
@@ -196,6 +198,7 @@ func (this *${name}) Init() {
   % endfor
 }
 
+% if not packet.is_custom_sized():
 func (this ${name}) Size() int {
   % if packet.is_const_size():
   return ${packet.get_const_size()}
@@ -212,6 +215,7 @@ func (this ${name}) Size() int {
     % endif
   % endif
 }
+%endif
 
 func To${name}(p ${self.parent(packet)}) (${
     self.type(packet, pom.namespace, None, false)}, error) {
@@ -308,9 +312,14 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
     % else:
   size := ${val}.Size()
     % endif
-  this.OpenGap(offset, size, this.Size())
+  pSize := this.Size()
+  this.OpenGap(offset, size, pSize)
+  % if packet.is_custom_sized():
+  this.SetSize(pSize + size)
+  % else:
   this.${self.setter(packet.get_size_field())}(${
-      BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
+      BUILTIN_TYPES[packet.get_size_field().type.name]}(pSize + size))
+  %endif
   ${self.write_field(field, 'offset', val, 'size')}
     % if field.get_count_field():
   count := this.${self.getter(field.get_count_field())}()
@@ -331,9 +340,14 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
     panic("Repeated field ${field.name} is already set.")
   }
   size := ${val}.Size()
+  pSize := this.Size()
+  this.OpenGap(offset, size, pSize)
+  % if packet.is_custom_sized():
+  this.SetSize(pSize + size)
+  % else:
   this.${self.setter(packet.get_size_field())}(${
-      BUILTIN_TYPES[packet.get_size_field().type.name]}(this.Size() + size))
-  this.OpenGap(offset, size, this.Size())
+      BUILTIN_TYPES[packet.get_size_field().type.name]}(pSize + size))
+  %endif
   ${self.write_field(field, 'offset', val)}
   % elif packet.is_padded() and not packet.get_padding_info().excluded and packet.get_size_field() == field:
   ${val} = ${BUILTIN_TYPES[field.type.name]}(packet.PaddedSize(int(${val}), ${

@@ -51,7 +51,7 @@ def create_packet_level_annotation(packet, annotation_model):
       'Packet and annotation model cannot be None.'
   annot_class = __packet_level_annotations.get(annotation_model.name)
   if not annot_class:
-    raise Exception('Annotation not found: %s' % annotation_model.name)
+    raise Exception('No such annotation: %s' % annotation_model.name)
 
   return annot_class(packet, annotation_model)
 
@@ -106,6 +106,16 @@ class TypeSelectorAnnotation(PacketLevelAnnotation):
                         self._packet.name)
       cond.append((field, param.value))
     return cond
+
+
+@packet_level_annotation('custom_size')  # pylint: disable=R0903
+class CustomSizeAnnotation(PacketLevelAnnotation):
+  ''' custom_size is used for packets that their size must be calculated by an
+      external implementation. '''
+  def __init__(self, packet, model):
+    PacketLevelAnnotation.__init__(self, packet, model)
+    packet.size_info = (True, None)
+
 
 @packet_level_annotation('padded')  # pylint: disable=R0903
 class PaddedAnnotation(PacketLevelAnnotation):

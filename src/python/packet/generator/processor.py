@@ -20,10 +20,16 @@
 
 __author__ = 'Soheil Hassas Yeganeh <soheil@cs.toronto.edu>'
 
+import logging
+
 from abc import ABCMeta
 from abc import abstractmethod
 
 from packet.types import BuiltInType
+
+
+LOG = logging.getLogger('packet.generator.processor')
+
 
 class ModelProcessor(object):
   ''' Model processors process the packet object model and add additional data
@@ -135,8 +141,10 @@ class SizeProcessor(ModelProcessor):
       packet.size_info = (False, packet.min_size)
       return
 
-    assert packet.parent and packet.parent.get_size_field(), \
-        'Packet does not have any size field: %s' % packet.name
+    if not packet.parent or not packet.parent.get_size_field():
+      LOG.debug('Found packet with custom size: %s', packet.name)
+      packet.size_info = (True, None)
+      return
 
     packet.size_info = (True, packet.parent.get_size_field())
 
@@ -145,6 +153,9 @@ class SizeProcessor(ModelProcessor):
     if isinstance(packet, BuiltInType):
       return True
 
+    if packet.annotations.get('custom_size'):
+      return False
+
     if packet.get_size_field():
       return False
 
@@ -152,7 +163,7 @@ class SizeProcessor(ModelProcessor):
       return False
 
     for field in packet.fields:
-      if field.is_dynamic_repeated():
+      if field.is_dynamic_repeated() or not self._is_const_size(field.type):
         return False
     return True
 

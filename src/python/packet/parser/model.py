@@ -191,7 +191,7 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       return None
 
     if name.find('.') == -1:
-      LOG.debug('Finding %s in %s', name, self.namespace)
+      LOG.debug('Found %s in %s', name, self.namespace)
       return self.packets.get(name) or self.enums.get(name)
     else:
       # TODO(soheil): Just one level of namespaces?
@@ -199,7 +199,7 @@ class PacketObjectModel(object):  # pylint: disable=R0903
       type_name = name.split('.')[-1]
 
       if namespace == self.namespace:
-        LOG.debug('Finding %s in %s', name, namespace)
+        LOG.debug('Found %s in %s', name, namespace)
         return self.packets.get(type_name) or self.enums.get(type_name)
 
       namespace_pom = self.includes.get(namespace)
@@ -342,6 +342,10 @@ class Packet(object):  # pylint: disable=R0902,R0903
   def is_const_size(self):
     ''' Returns whether the packet is fixed in size. '''
     return not self.size_info[0]
+
+  def is_custom_sized(self):
+    ''' Whether the packet has a custom size (ie, no specific size field). '''
+    return self.size_info[0] and not self.size_info[1]
 
   def get_type_selector_condition(self, recursive=False):
     ''' Returns the type selector condition. '''
