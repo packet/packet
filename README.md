@@ -15,8 +15,7 @@ for most applications, but won't work for predefined binary wire protocols.
 If someone gives you a protocol definition in
 [TLV](http://en.wikipedia.org/wiki/Type-length-value), you're on your own to
 write the bindings. It gets even worse, when you have to support different
-languages. That's why I started the Packet project for these Odd (but important
-:P) applications.
+languages. That's why I started the Packet project for these Odd (but important) applications.
 
 # Features
 ## Polymorphism
@@ -27,23 +26,24 @@ are separately generated.
 # Example
 This is a packet snippet that implements an OpenFlow packet_in:
 
-  # Packet received on port (datapath -> controller).
-  @type_selector(type = Type.PT_PACKET_IN)
-  packet PacketIn(Header10) {
-    uint32 buffer_id;     # ID assigned by datapath.
-    uint16 total_len;     # Full length of frame.
-    uint16 in_port;       # Port on which frame was received.
-    uint8 reason;         # Reason packet is being sent (one of.PR_*)
-    uint8 pad;
-  
-    @repeated
-    uint8 data;           # Ethernet frame, halfway through 32-bit word,
-                          # so the IP header is 32-bit aligned.  The
-                          # amount of data is inferred from the length
-                          # field in the header.  Because of padding,
-                          # offsetof(packet PacketIn, data) ==
-                          # sizeof(packet PacketIn) - 2.
-  }
+```
+# Packet received on port (datapath -> controller).
+@type_selector(type = Type.PT_PACKET_IN)
+packet PacketIn(Header10) {
+  uint32 buffer_id;     # ID assigned by datapath.
+  uint16 total_len;     # Full length of frame.
+  uint16 in_port;       # Port on which frame was received.
+  uint8 reason;         # Reason packet is being sent (one of.PR_*)
+  uint8 pad;
 
+  @repeated
+  uint8 data;           # Ethernet frame, halfway through 32-bit word,
+                        # so the IP header is 32-bit aligned.  The
+                        # amount of data is inferred from the length
+                        # field in the header.  Because of padding,
+                        # offsetof(packet PacketIn, data) ==
+                        # sizeof(packet PacketIn) - 2.
+}
+```
 
 `PacketIn` derives from openflow header v1.0. The type field of a packet in always is always PT_PACKET_IN.
