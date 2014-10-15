@@ -46,4 +46,6 @@ packet PacketIn(Header10) {
 }
 ```
 
-`PacketIn` derives from openflow header v1.0. The type field of a packet in always is always PT_PACKET_IN.
+`PacketIn` derives from openflow header v1.0. The type field of a packet in always is always `PT_PACKET_IN`.
+
+For a more comprehensive example take a look at: https://github.com/kandoo/beehive-netctrl/blob/master/openflow/of10.packet
