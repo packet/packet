@@ -276,16 +276,14 @@ class EnumItem(object):  # pylint: disable=R0903
     if not enum_item.children:
       return int(enum_item.text, 0)
 
-    if enum_item.enum_ref_list:
-      item = self.enum.pom.find_enum_item(enum_item.enum_ref_list[0])
+    if enum_item.text == 'ENUM_REF':
+      item = self.enum.pom.find_enum_item(enum_item)
       assert item, \
           'Enum not found in value of %s' % self.name
       return item.value
 
-
     children_values = [self.__evaluate_value(child)
                        for child in enum_item.children]
-
     return get_binary_operator(enum_item.text)(children_values[0],
                                                children_values[1])
 
