@@ -56,7 +56,8 @@ func ${self.default_constructor(packet, pom.namespace)}() ${
     self.type(packet, pom.namespace)} {
   % if packet.get_padding_info():
   s := packet.PaddedSize(${packet.min_size}, ${
-                         packet.get_padding_info().multiple})
+                         packet.get_padding_info().multiple}, ${
+                         packet.get_padding_info().constant})
   % else:
   s := ${packet.min_size}
   % endif
@@ -94,7 +95,7 @@ type ${name}Conn struct {
 func New${name}Conn(c net.Conn) ${name}Conn {
   return ${name}Conn {
     Conn: c,
-		w: bufio.NewWriter(c),
+    w: bufio.NewWriter(c),
     buf: make([]byte, packet.DefaultBufSize),
   }
 }
@@ -211,7 +212,8 @@ func (this ${name}) Size() int {
     % if not packet.is_padded():
   return size
     % else:
-  return packet.PaddedSize(size, ${packet.get_padding_info().multiple})
+  return packet.PaddedSize(size, ${packet.get_padding_info().multiple}, ${
+                           packet.get_padding_info().constant})
     % endif
   % endif
 }
@@ -351,7 +353,8 @@ func (this *${name}) ${self.setter(field)}(${val} ${setter_type}) {
   ${self.write_field(field, 'offset', val)}
   % elif packet.is_padded() and not packet.get_padding_info().excluded and packet.get_size_field() == field:
   ${val} = ${BUILTIN_TYPES[field.type.name]}(packet.PaddedSize(int(${val}), ${
-      packet.get_padding_info().multiple}))
+      packet.get_padding_info().multiple}, ${
+      packet.get_padding_info().constant}))
   ${self.write_field(field, 'offset', val)}
   % else:
   ${self.write_field(field, 'offset', val)}

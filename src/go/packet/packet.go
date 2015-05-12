@@ -52,10 +52,10 @@ func (p *Packet) OpenGap(offset, size, packetSize int) {
 }
 
 // PaddedSize returns the size padded to the given multiple.
-func PaddedSize(size int, multiple int) int {
+func PaddedSize(size int, multiple int, constant int) int {
 	if multiple == 0 {
-		return size
+		return size + constant
 	}
 
-	return ((size + multiple - 1) / multiple) * multiple
+	return ((size+multiple-1)/multiple)*multiple + constant
 }

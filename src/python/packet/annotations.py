@@ -126,9 +126,13 @@ class PaddedAnnotation(PacketLevelAnnotation):
   def __init__(self, packet, model):
     PacketLevelAnnotation.__init__(self, packet, model)
     self.excluded = False
+    self.constant = 0
+    self.multiple = 1
     for param in self._model.params:
       if param.name == 'multiple':
         self.multiple = int(param.value)
+      if param.name == 'constant':
+        self.constant = int(param.value)
       elif param.name == 'excluded':
         self.excluded = True
 
