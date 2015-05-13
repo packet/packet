@@ -359,7 +359,14 @@ class Packet(object):  # pylint: disable=R0902,R0903
 
   def get_padding_info(self):
     ''' Returns the padding information of the class. '''
-    return self.annotations.get('padded')
+    padded = self.annotations.get('padded')
+    if padded:
+      return padded
+
+    if self.parent:
+      return self.parent.get_padding_info()
+
+    return None
 
   def is_padded(self):
     ''' Whether the packet is padded. '''
